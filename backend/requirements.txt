@@ -1,0 +1,17 @@
+# FastAPI 백엔드 의존성
+# backend/requirements.txt
+
+# 웹 프레임워크
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+
+# 데이터베이스
+sqlalchemy>=2.0.25
+psycopg[binary]>=3.2.0
+
+# 설정 관리
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# 유틸리티
+python-multipart==0.0.6

@@ -1,0 +1,6 @@
+﻿.__pycache__
+.idea
+backend/app/models/__pycache__
+backend/app/routers/__pycache__
+backend/app/schemas/__pycache__
+backend/app/__pycache__
