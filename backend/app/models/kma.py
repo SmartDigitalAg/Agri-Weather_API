@@ -45,6 +45,7 @@ class WeatherRealtime(Base):
     __tablename__ = "weather_realtime"
 
     id = Column(Integer, primary_key=True, index=True)
+    sido = Column(String(50), index=True)  # 시도 (도/광역시)
     region_name = Column(String(100), index=True)  # 지역명
     nx = Column(Integer)  # 격자 X
     ny = Column(Integer)  # 격자 Y

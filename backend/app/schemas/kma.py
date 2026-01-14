@@ -39,6 +39,7 @@ class AsosDailyResponse(BaseModel):
 class WeatherRealtimeResponse(BaseModel):
     """초단기 실황 응답 스키마"""
     id: int
+    sido: Optional[str] = Field(default=None, description="시도 (도/광역시)")
     region_name: Optional[str] = Field(default=None, description="지역명")
     nx: Optional[int] = Field(default=None, description="격자 X")
     ny: Optional[int] = Field(default=None, description="격자 Y")
@@ -54,6 +55,7 @@ class WeatherRealtimeResponse(BaseModel):
 
 class WeatherRealtimePivotResponse(BaseModel):
     """초단기 실황 피벗 응답 스키마 (카테고리별 컬럼)"""
+    sido: Optional[str] = Field(default=None, description="시도 (도/광역시)")
     region_name: str = Field(description="지역명")
     base_date: dt.date = Field(description="발표일자")
     base_time: str = Field(description="발표시각")

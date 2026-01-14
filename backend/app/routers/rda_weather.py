@@ -227,7 +227,7 @@ def get_monthly_by_range(
 @router.get("/stations", response_model=List[dict], summary="RDA 관측소 목록 조회")
 def get_rda_stations(db: Session = Depends(get_db)):
     """
-    RDA 관측소 목록을 조회합니다.
+    RDA 관측소 목록을 조회합니다. (일별 데이터 기준)
     """
     results = db.query(
         WeatherDataDaily.stn_cd,
@@ -250,3 +250,56 @@ def get_rda_stations(db: Session = Depends(get_db)):
         }
         for r in results
     ]
+
+
+@router.get("/realtime/stations", response_model=List[dict], summary="RDA 실시간 관측소 목록 조회")
+def get_rda_realtime_stations(
+    province: Optional[str] = Query(default=None, description="도/광역시로 필터링"),
+    db: Session = Depends(get_db)
+):
+    """
+    RDA 실시간 데이터가 있는 관측소 목록을 조회합니다. (10분 데이터 기준)
+    """
+    query = db.query(
+        WeatherData.province,
+        WeatherData.stn_cd,
+        WeatherData.stn_name,
+        func.count(WeatherData.id).label("data_count"),
+        func.min(WeatherData.datetime).label("first_datetime"),
+        func.max(WeatherData.datetime).label("last_datetime")
+    )
+
+    if province:
+        query = query.filter(WeatherData.province == province)
+
+    results = query.group_by(
+        WeatherData.province,
+        WeatherData.stn_cd,
+        WeatherData.stn_name
+    ).order_by(WeatherData.province, WeatherData.stn_cd).all()
+
+    return [
+        {
+            "province": r.province,
+            "stn_cd": r.stn_cd,
+            "stn_name": r.stn_name,
+            "data_count": r.data_count,
+            "first_datetime": r.first_datetime,
+            "last_datetime": r.last_datetime
+        }
+        for r in results
+    ]
+
+
+@router.get("/realtime/provinces", response_model=List[str], summary="RDA 실시간 도/광역시 목록 조회")
+def get_rda_realtime_provinces(db: Session = Depends(get_db)):
+    """
+    RDA 실시간 데이터가 있는 도/광역시 목록을 조회합니다.
+    """
+    results = db.query(
+        WeatherData.province
+    ).filter(
+        WeatherData.province.isnot(None)
+    ).distinct().order_by(WeatherData.province).all()
+
+    return [r.province for r in results if r.province]

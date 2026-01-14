@@ -46,6 +46,7 @@ def get_latest_realtime(
 
 @router.get("/latest/pivot", response_model=List[WeatherRealtimePivotResponse], summary="최신 초단기 실황 (피벗)")
 def get_latest_realtime_pivot(
+    sido: Optional[str] = Query(default=None, description="시도 (미입력시 전체)"),
     region_name: Optional[str] = Query(default=None, description="지역명 (미입력시 전체)"),
     limit: int = Query(default=20, ge=1, le=100, description="조회 개수"),
     db: Session = Depends(get_db)
@@ -56,6 +57,7 @@ def get_latest_realtime_pivot(
     """
     # 최신 발표 시각 조회
     subquery = db.query(
+        WeatherRealtime.sido,
         WeatherRealtime.region_name,
         WeatherRealtime.base_date,
         WeatherRealtime.base_time
@@ -64,6 +66,8 @@ def get_latest_realtime_pivot(
         desc(WeatherRealtime.base_time)
     )
 
+    if sido:
+        subquery = subquery.filter(WeatherRealtime.sido == sido)
     if region_name:
         subquery = subquery.filter(WeatherRealtime.region_name == region_name)
 
@@ -80,6 +84,7 @@ def get_latest_realtime_pivot(
 
         # 피벗 변환
         pivot_data = {
+            "sido": lt.sido,
             "region_name": lt.region_name,
             "base_date": lt.base_date,
             "base_time": lt.base_time,
@@ -135,23 +140,34 @@ def get_realtime_by_region(
 
 
 @router.get("/regions", response_model=List[dict], summary="초단기 실황 지역 목록 조회")
-def get_realtime_regions(db: Session = Depends(get_db)):
+def get_realtime_regions(
+    sido: Optional[str] = Query(default=None, description="시도로 필터링"),
+    db: Session = Depends(get_db)
+):
     """
     초단기 실황 데이터가 있는 지역 목록을 조회합니다.
     """
-    results = db.query(
+    query = db.query(
+        WeatherRealtime.sido,
         WeatherRealtime.region_name,
         WeatherRealtime.nx,
         WeatherRealtime.ny,
         func.count(WeatherRealtime.id).label("data_count")
-    ).group_by(
+    )
+
+    if sido:
+        query = query.filter(WeatherRealtime.sido == sido)
+
+    results = query.group_by(
+        WeatherRealtime.sido,
         WeatherRealtime.region_name,
         WeatherRealtime.nx,
         WeatherRealtime.ny
-    ).order_by(WeatherRealtime.region_name).all()
+    ).order_by(WeatherRealtime.sido, WeatherRealtime.region_name).all()
 
     return [
         {
+            "sido": r.sido,
             "region_name": r.region_name,
             "nx": r.nx,
             "ny": r.ny,
@@ -159,3 +175,17 @@ def get_realtime_regions(db: Session = Depends(get_db)):
         }
         for r in results
     ]
+
+
+@router.get("/sidos", response_model=List[str], summary="초단기 실황 시도 목록 조회")
+def get_realtime_sidos(db: Session = Depends(get_db)):
+    """
+    초단기 실황 데이터가 있는 시도 목록을 조회합니다.
+    """
+    results = db.query(
+        WeatherRealtime.sido
+    ).filter(
+        WeatherRealtime.sido.isnot(None)
+    ).distinct().order_by(WeatherRealtime.sido).all()
+
+    return [r.sido for r in results if r.sido]

@@ -18,6 +18,7 @@ class WeatherData(Base):
     no = Column(Integer)  # 순번
     stn_cd = Column(String(20), index=True)  # 관측소 코드
     stn_name = Column(String(100))  # 관측소명
+    province = Column(String(50), index=True)  # 도/광역시
     datetime = Column(TIMESTAMP, index=True)  # 관측일시
     temp = Column(Float)  # 기온
     hghst_artmp = Column(Float)  # 최고기온

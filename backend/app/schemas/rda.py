@@ -14,6 +14,7 @@ class WeatherDataResponse(BaseModel):
     id: int
     stn_cd: Optional[str] = Field(default=None, description="관측소 코드")
     stn_name: Optional[str] = Field(default=None, description="관측소명")
+    province: Optional[str] = Field(default=None, description="도/광역시")
     datetime: Optional[dt.datetime] = Field(default=None, description="관측일시")
     temp: Optional[float] = Field(default=None, description="기온 (°C)")
     hghst_artmp: Optional[float] = Field(default=None, description="최고기온 (°C)")
