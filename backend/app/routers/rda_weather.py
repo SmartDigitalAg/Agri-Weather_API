@@ -30,7 +30,7 @@ router = APIRouter(
 @router.get("/realtime/latest", response_model=List[WeatherDataResponse], summary="최신 10분 간격 데이터 조회")
 def get_latest_realtime_data(
     stn_cd: Optional[str] = Query(default=None, description="관측소 코드"),
-    limit: int = Query(default=20, ge=1, le=100, description="조회 개수"),
+    limit: int = Query(default=20, ge=1, le=500, description="조회 개수"),
     db: Session = Depends(get_db)
 ):
     """

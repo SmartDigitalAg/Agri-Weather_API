@@ -48,7 +48,7 @@ def get_latest_realtime(
 def get_latest_realtime_pivot(
     sido: Optional[str] = Query(default=None, description="시도 (미입력시 전체)"),
     region_name: Optional[str] = Query(default=None, description="지역명 (미입력시 전체)"),
-    limit: int = Query(default=20, ge=1, le=100, description="조회 개수"),
+    limit: int = Query(default=20, ge=1, le=500, description="조회 개수"),
     db: Session = Depends(get_db)
 ):
     """
