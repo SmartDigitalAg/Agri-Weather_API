@@ -101,7 +101,64 @@ def get_latest_realtime_pivot(
     return results
 
 
-@router.get("/region/{region_name}", response_model=PaginatedResponse, summary="지역별 초단기 실황 조회")
+@router.get("/region/{region_name}/range", summary="지역별 기간 조회 (피벗)")
+def get_realtime_by_region_range(
+    region_name: str,
+    start_date: date = Query(description="시작 날짜"),
+    end_date: date = Query(description="종료 날짜"),
+    offset: int = Query(default=0, ge=0, description="건너뛸 레코드 수"),
+    limit: int = Query(default=20, ge=1, le=10000, description="조회할 레코드 수"),
+    db: Session = Depends(get_db)
+):
+    """
+    특정 지역의 기간별 초단기 실황 데이터를 피벗 형태로 조회합니다.
+    """
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="시작 날짜가 종료 날짜보다 늦을 수 없습니다.")
+
+    # 해당 기간의 고유 시간대 조회
+    subquery = db.query(
+        WeatherRealtime.base_date,
+        WeatherRealtime.base_time
+    ).filter(
+        WeatherRealtime.region_name == region_name,
+        WeatherRealtime.base_date >= start_date,
+        WeatherRealtime.base_date <= end_date
+    ).distinct().order_by(
+        desc(WeatherRealtime.base_date),
+        desc(WeatherRealtime.base_time)
+    )
+
+    total = subquery.count()
+    time_slots = subquery.offset(offset).limit(limit).all()
+
+    results = []
+    for ts in time_slots:
+        # 해당 시각의 모든 카테고리 조회
+        records = db.query(WeatherRealtime).filter(
+            WeatherRealtime.region_name == region_name,
+            WeatherRealtime.base_date == ts.base_date,
+            WeatherRealtime.base_time == ts.base_time
+        ).all()
+
+        # 피벗 변환
+        pivot_data = {
+            "region_name": region_name,
+            "base_date": ts.base_date.isoformat() if ts.base_date else None,
+            "base_time": ts.base_time,
+            "T1H": None, "RN1": None, "REH": None, "VEC": None, "WSD": None
+        }
+
+        for r in records:
+            if r.category in pivot_data:
+                pivot_data[r.category] = r.obsrvalue
+
+        results.append(pivot_data)
+
+    return {"total": total, "offset": offset, "limit": limit, "data": results}
+
+
+@router.get("/region/{region_name}", summary="지역별 초단기 실황 조회")
 def get_realtime_by_region(
     region_name: str,
     target_date: Optional[date] = Query(default=None, description="조회 날짜 (미입력시 전체)"),
@@ -131,12 +188,20 @@ def get_realtime_by_region(
         desc(WeatherRealtime.base_time)
     ).offset(offset).limit(limit).all()
 
-    return PaginatedResponse(
-        total=total,
-        offset=offset,
-        limit=limit,
-        data=results
-    )
+    # 딕셔너리로 변환
+    data = [
+        {
+            "id": r.id,
+            "region_name": r.region_name,
+            "base_date": r.base_date.isoformat() if r.base_date else None,
+            "base_time": r.base_time,
+            "category": r.category,
+            "obsrvalue": r.obsrvalue
+        }
+        for r in results
+    ]
+
+    return {"total": total, "offset": offset, "limit": limit, "data": data}
 
 
 @router.get("/regions", response_model=List[dict], summary="초단기 실황 지역 목록 조회")

@@ -436,9 +436,9 @@ const PastWeather = () => {
           setError(errorData.detail || '데이터 조회 실패');
         }
       } else if (institution === 'KMA' && selectedKmaRegion) {
-        // KMA 데이터 조회
+        // KMA 기간 데이터 조회 (피벗)
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}?target_date=${startDateStr}&limit=20`
+          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}/range?start_date=${startDateStr}&end_date=${endDateStr}&limit=20`
         );
         if (response.ok) {
           const data = await response.json();
@@ -513,7 +513,7 @@ const PastWeather = () => {
         }
       } else if (institution === 'KMA' && selectedKmaRegion) {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}?target_date=${startDateStr}&limit=10000`
+          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}/range?start_date=${startDateStr}&end_date=${endDateStr}&limit=10000`
         );
         if (response.ok) {
           const data = await response.json();
@@ -551,7 +551,7 @@ const PastWeather = () => {
         }
       } else if (institution === 'KMA' && selectedKmaRegion) {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}?limit=10000`
+          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}/range?start_date=${startDateStr}&end_date=${endDateStr}&limit=10000`
         );
         if (response.ok) {
           const data = await response.json();
