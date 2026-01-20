@@ -116,7 +116,7 @@ def get_daily_by_date(
     return results
 
 
-@router.get("/daily/range", response_model=PaginatedResponse, summary="기간별 일별 데이터 조회")
+@router.get("/daily/range", summary="기간별 일별 데이터 조회")
 def get_daily_by_range(
     start_date: date = Query(description="시작 날짜"),
     end_date: date = Query(description="종료 날짜"),
@@ -144,7 +144,24 @@ def get_daily_by_range(
     results = query.order_by(WeatherDataDaily.date, WeatherDataDaily.stn_cd)\
         .offset(offset).limit(limit).all()
 
-    return PaginatedResponse(total=total, offset=offset, limit=limit, data=results)
+    # SQLAlchemy 모델을 딕셔너리로 변환
+    data = [
+        {
+            "id": r.id,
+            "stn_cd": r.stn_cd,
+            "stn_name": r.stn_name,
+            "date": r.date.isoformat() if r.date else None,
+            "temp": r.temp,
+            "hghst_artmp": r.hghst_artmp,
+            "lowst_artmp": r.lowst_artmp,
+            "hum": r.hum,
+            "wind": r.wind,
+            "rn": r.rn,
+        }
+        for r in results
+    ]
+
+    return {"total": total, "offset": offset, "limit": limit, "data": data}
 
 
 # ===== 월별 데이터 =====

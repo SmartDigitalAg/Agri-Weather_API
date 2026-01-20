@@ -89,13 +89,23 @@ async def add_process_time_header(request: Request, call_next):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """전역 예외 처리"""
-    return JSONResponse(
+    import traceback
+    print(f"[ERROR] {request.url}")
+    print(f"[ERROR] {exc}")
+    traceback.print_exc()
+
+    response = JSONResponse(
         status_code=500,
         content={
             "detail": "서버 내부 오류가 발생했습니다.",
-            "error": str(exc) if settings.DEBUG else None
+            "error": str(exc)
         }
     )
+    # CORS 헤더 추가
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 
 # 라우터 등록
