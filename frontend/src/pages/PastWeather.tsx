@@ -305,20 +305,26 @@ const PastWeather = () => {
     if (selectedRdaStation) {
       const station = rdaStations.find(s => s.stn_cd === selectedRdaStation);
       if (station && station.first_date && station.last_date) {
-        const start = new Date(station.first_date);
+        const dataStart = new Date(station.first_date);
         const twoDaysAgo = getTwoDaysAgo();
         const lastDate = new Date(station.last_date);
 
         // 종료일은 2일 전과 last_date 중 더 이른 날짜
         const end = twoDaysAgo < lastDate ? twoDaysAgo : lastDate;
 
-        setDataStartDate(start);
+        // 데이터 범위 설정 (선택 가능한 전체 범위)
+        setDataStartDate(dataStart);
         setDataEndDate(end);
 
-        // 기본값 설정: 시작 = 데이터 시작일, 종료 = 2일 전
-        setStartYear(start.getFullYear());
-        setStartMonth(start.getMonth() + 1);
-        setStartDay(start.getDate());
+        // 기본 조회 시작일: 최근 1개월 전 (단, 데이터 시작일보다 이전이면 데이터 시작일 사용)
+        const oneMonthAgo = new Date(end);
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        const defaultStart = oneMonthAgo > dataStart ? oneMonthAgo : dataStart;
+
+        // 기본값 설정: 시작 = 최근 1개월 전, 종료 = 2일 전
+        setStartYear(defaultStart.getFullYear());
+        setStartMonth(defaultStart.getMonth() + 1);
+        setStartDay(defaultStart.getDate());
         setEndYear(end.getFullYear());
         setEndMonth(end.getMonth() + 1);
         setEndDay(end.getDate());
@@ -331,20 +337,26 @@ const PastWeather = () => {
     if (selectedKmaRegion) {
       const region = kmaRegions.find(r => r.region_name === selectedKmaRegion);
       if (region && region.first_date && region.last_date) {
-        const start = new Date(region.first_date);
+        const dataStart = new Date(region.first_date);
         const twoDaysAgo = getTwoDaysAgo();
         const lastDate = new Date(region.last_date);
 
         // 종료일은 2일 전과 last_date 중 더 이른 날짜
         const end = twoDaysAgo < lastDate ? twoDaysAgo : lastDate;
 
-        setDataStartDate(start);
+        // 데이터 범위 설정 (선택 가능한 전체 범위)
+        setDataStartDate(dataStart);
         setDataEndDate(end);
 
-        // 기본값 설정: 시작 = 데이터 시작일, 종료 = 종료일
-        setStartYear(start.getFullYear());
-        setStartMonth(start.getMonth() + 1);
-        setStartDay(start.getDate());
+        // 기본 조회 시작일: 최근 1개월 전 (단, 데이터 시작일보다 이전이면 데이터 시작일 사용)
+        const oneMonthAgo = new Date(end);
+        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        const defaultStart = oneMonthAgo > dataStart ? oneMonthAgo : dataStart;
+
+        // 기본값 설정: 시작 = 최근 1개월 전, 종료 = 종료일
+        setStartYear(defaultStart.getFullYear());
+        setStartMonth(defaultStart.getMonth() + 1);
+        setStartDay(defaultStart.getDate());
         setEndYear(end.getFullYear());
         setEndMonth(end.getMonth() + 1);
         setEndDay(end.getDate());
