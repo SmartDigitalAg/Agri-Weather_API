@@ -152,7 +152,9 @@ def get_realtime_regions(
         WeatherRealtime.region_name,
         WeatherRealtime.nx,
         WeatherRealtime.ny,
-        func.count(WeatherRealtime.id).label("data_count")
+        func.count(WeatherRealtime.id).label("data_count"),
+        func.min(WeatherRealtime.base_date).label("first_date"),
+        func.max(WeatherRealtime.base_date).label("last_date")
     )
 
     if sido:
@@ -171,7 +173,9 @@ def get_realtime_regions(
             "region_name": r.region_name,
             "nx": r.nx,
             "ny": r.ny,
-            "data_count": r.data_count
+            "data_count": r.data_count,
+            "first_date": r.first_date,
+            "last_date": r.last_date
         }
         for r in results
     ]

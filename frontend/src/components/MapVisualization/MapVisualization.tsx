@@ -4,11 +4,23 @@ import type { MapMarker } from '../../types';
 import geoData from './SIDO_MAP_2022.json';
 import { provinceCenters } from '../../data/koreaGeo';
 
+// 카드형 마커 데이터 타입
+export interface WeatherCardMarker {
+  id: string;
+  name: string;           // 시군구 이름
+  temperature: number;    // 기온
+  latitude: number;
+  longitude: number;
+}
+
 interface MapVisualizationProps {
   markers: MapMarker[];
+  weatherCards?: WeatherCardMarker[];  // 카드형 마커
   onMarkerClick?: (marker: MapMarker) => void;
+  onWeatherCardClick?: (card: WeatherCardMarker) => void;  // 카드 클릭 핸들러
   onProvinceClick?: (provinceName: string) => void;
   selectedMarkerId?: string;
+  selectedCardId?: string;  // 선택된 카드
   selectedProvince?: string;
 }
 
@@ -33,13 +45,16 @@ interface GeoData {
 
 const MapVisualization: React.FC<MapVisualizationProps> = ({
   markers,
+  weatherCards = [],
   onMarkerClick,
+  onWeatherCardClick,
   onProvinceClick,
   selectedMarkerId,
+  selectedCardId,
   selectedProvince,
 }) => {
   const [hoveredMarker, setHoveredMarker] = useState<MapMarker | null>(null);
-  const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
+  const [hoveredCardId, setHoveredCardId] = useState<string | null>(null);
 
   // SVG dimensions
   const width = 500;
@@ -89,10 +104,9 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({
     '50': '제주특별자치도'
   };
 
-  // Province colors
+  // Province colors - hover 효과 제거
   const getProvinceColor = (provinceName: string) => {
     if (selectedProvince === provinceName) return '#22c55e';
-    if (hoveredProvince === provinceName) return '#86efac';
     return '#d1fae5';
   };
 
@@ -124,9 +138,7 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({
                 d={path}
                 fill={getProvinceColor(provinceName)}
                 stroke="none"
-                className="cursor-pointer transition-colors duration-200"
-                onMouseEnter={() => setHoveredProvince(provinceName)}
-                onMouseLeave={() => setHoveredProvince(null)}
+                className="cursor-pointer"
                 onClick={() => onProvinceClick?.(provinceName)}
               />
             );
@@ -231,6 +243,79 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({
               </g>
             );
           })}
+
+          {/* Weather Cards */}
+          {weatherCards.map((card) => {
+            const { x, y } = latLngToXY(card.latitude, card.longitude);
+            const isSelected = selectedCardId === card.id;
+            const isHovered = hoveredCardId === card.id;
+            const scale = isSelected || isHovered ? 1.12 : 1;
+
+            // 카드 기본 사이즈 (더 크게)
+            const cardWidth = 70;
+            const cardHeight = 36;
+
+            return (
+              <g
+                key={card.id}
+                transform={`translate(${x}, ${y})`}
+                onClick={() => onWeatherCardClick?.(card)}
+                onMouseEnter={() => setHoveredCardId(card.id)}
+                onMouseLeave={() => setHoveredCardId(null)}
+                className="cursor-pointer"
+                style={{ transition: 'transform 0.2s ease' }}
+              >
+                {/* Card shadow */}
+                <rect
+                  x={-(cardWidth / 2) * scale}
+                  y={-(cardHeight / 2) * scale + 2}
+                  width={cardWidth * scale}
+                  height={cardHeight * scale}
+                  rx={5}
+                  fill="rgba(0,0,0,0.2)"
+                  style={{ transition: 'all 0.2s ease' }}
+                />
+                {/* Card background */}
+                <rect
+                  x={-(cardWidth / 2) * scale}
+                  y={-(cardHeight / 2) * scale}
+                  width={cardWidth * scale}
+                  height={cardHeight * scale}
+                  rx={5}
+                  fill={isSelected ? '#22c55e' : 'white'}
+                  stroke={isSelected ? '#16a34a' : '#d1d5db'}
+                  strokeWidth={isSelected ? 2 : 1}
+                  style={{ transition: 'all 0.2s ease' }}
+                />
+                {/* Region name */}
+                <text
+                  x={0}
+                  y={-4 * scale}
+                  textAnchor="middle"
+                  fill={isSelected ? 'white' : '#374151'}
+                  fontSize={9 * scale}
+                  fontWeight="500"
+                  className="pointer-events-none select-none"
+                  style={{ transition: 'all 0.2s ease' }}
+                >
+                  {card.name}
+                </text>
+                {/* Temperature */}
+                <text
+                  x={0}
+                  y={11 * scale}
+                  textAnchor="middle"
+                  fill={isSelected ? 'white' : '#ef4444'}
+                  fontSize={12 * scale}
+                  fontWeight="bold"
+                  className="pointer-events-none select-none"
+                  style={{ transition: 'all 0.2s ease' }}
+                >
+                  {card.temperature?.toFixed(1) ?? '-'}°
+                </text>
+              </g>
+            );
+          })}
         </svg>
 
         {/* Tooltip for marker */}
@@ -247,13 +332,6 @@ const MapVisualization: React.FC<MapVisualizationProps> = ({
             <p className="text-sm text-gray-600">
               기온: <span className="font-medium text-red-500">{hoveredMarker.value}°C</span>
             </p>
-          </div>
-        )}
-
-        {/* Tooltip for province */}
-        {hoveredProvince && !hoveredMarker && (
-          <div className="absolute bottom-4 left-4 bg-white rounded-lg shadow-lg px-3 py-2 pointer-events-none z-10">
-            <p className="font-medium text-gray-800">{hoveredProvince}</p>
           </div>
         )}
       </div>

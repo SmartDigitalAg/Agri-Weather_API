@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import CurrentWeather from './pages/CurrentWeather';
+import PastWeather from './pages/PastWeather';
 import type { DataCategory } from './types';
 
 function App() {
@@ -14,11 +15,7 @@ function App() {
       case 'current':
         return <CurrentWeather />;
       case 'past':
-        return (
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500">
-            과거기상 페이지 (준비중)
-          </div>
-        );
+        return <PastWeather />;
       case 'forecast':
         return (
           <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500">

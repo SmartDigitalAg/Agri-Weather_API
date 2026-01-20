@@ -1,7 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import MapVisualization from '../components/MapVisualization';
+import type { WeatherCardMarker } from '../components/MapVisualization';
 
 const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
+
+// RDA 지도에 표시할 6개 도 목록
+const RDA_TARGET_PROVINCES = ['경기도', '경상북도', '충청남도', '충청북도', '강원특별자치도', '전북특별자치도'];
+
+// RDA 각 도의 중심 좌표 (카드 표시 위치) - 겹치지 않게 조정
+const RDA_PROVINCE_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  '경기도': { lat: 37.55, lng: 127.15 },
+  '경상북도': { lat: 36.30, lng: 128.90 },
+  '충청남도': { lat: 36.50, lng: 126.75 },
+  '충청북도': { lat: 36.85, lng: 127.70 },
+  '강원특별자치도': { lat: 37.70, lng: 128.50 },
+  '전북특별자치도': { lat: 35.70, lng: 127.00 },
+};
+
+// KMA 지도에 표시할 도 목록
+const KMA_TARGET_SIDOS = ['경기도', '경상북도', '경상남도', '충청남도', '충청북도', '강원특별자치도', '전북특별자치도', '전라남도'];
+
+// KMA 각 도의 중심 좌표 (카드 표시 위치)
+const KMA_SIDO_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  '경기도': { lat: 37.55, lng: 127.15 },
+  '경상북도': { lat: 36.30, lng: 128.90 },
+  '경상남도': { lat: 35.35, lng: 128.30 },
+  '충청남도': { lat: 36.50, lng: 126.75 },
+  '충청북도': { lat: 36.85, lng: 127.70 },
+  '강원특별자치도': { lat: 37.70, lng: 128.50 },
+  '전북특별자치도': { lat: 35.70, lng: 127.00 },
+  '전라남도': { lat: 34.90, lng: 126.90 },
+};
 
 // 풍향 각도를 방향 문자로 변환
 const getWindDirection = (degree: number | null | undefined): string => {
@@ -97,13 +126,14 @@ const RdaWeatherSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialDataMap, setInitialDataMap] = useState<Map<string, RdaWeatherData>>(new Map());
+  const [provinceRepStations, setProvinceRepStations] = useState<Map<string, RdaWeatherData>>(new Map());
 
   // 실시간 데이터에서 관측소 목록 추출 및 도 목록 생성
   useEffect(() => {
     const fetchRealtimeData = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/rda/weather/realtime/latest?limit=100`);
+        const response = await fetch(`${API_BASE_URL}/api/rda/weather/realtime/latest?limit=500`);
         if (response.ok) {
           const data: RdaWeatherData[] = await response.json();
           if (data.length > 0) {
@@ -111,6 +141,9 @@ const RdaWeatherSection: React.FC = () => {
             const stationMap = new Map<string, RdaStation>();
             const dataMap = new Map<string, RdaWeatherData>();
             const provinceSet = new Set<string>();
+
+            // 6개 도의 대표 관측소 데이터 (각 도에서 첫 번째 관측소)
+            const repStationMap = new Map<string, RdaWeatherData>();
 
             data.forEach(item => {
               if (!stationMap.has(item.stn_cd)) {
@@ -122,6 +155,10 @@ const RdaWeatherSection: React.FC = () => {
                 dataMap.set(item.stn_cd, item);
                 if (item.province) {
                   provinceSet.add(item.province);
+                  // 6개 대상 도에 해당하고, 아직 대표 관측소가 없으면 추가
+                  if (RDA_TARGET_PROVINCES.includes(item.province) && !repStationMap.has(item.province)) {
+                    repStationMap.set(item.province, item);
+                  }
                 }
               }
             });
@@ -132,6 +169,7 @@ const RdaWeatherSection: React.FC = () => {
             setStations(uniqueStations);
             setProvinces(uniqueProvinces);
             setInitialDataMap(dataMap);
+            setProvinceRepStations(repStationMap);
 
             // 첫 번째 도 선택
             if (uniqueProvinces.length > 0) {
@@ -164,6 +202,41 @@ const RdaWeatherSection: React.FC = () => {
     };
     fetchRealtimeData();
   }, []);
+
+  // 지도에 표시할 카드 마커 생성
+  const weatherCards: WeatherCardMarker[] = useMemo(() => {
+    const cards: WeatherCardMarker[] = [];
+    provinceRepStations.forEach((data, province) => {
+      const coords = RDA_PROVINCE_COORDINATES[province];
+      if (coords && data.temp !== null) {
+        cards.push({
+          id: data.stn_cd,
+          name: data.stn_name,
+          temperature: data.temp,
+          latitude: coords.lat,
+          longitude: coords.lng,
+        });
+      }
+    });
+    return cards;
+  }, [provinceRepStations]);
+
+  // 카드 클릭 핸들러 - 해당 지역 기상 데이터로 변경
+  const handleWeatherCardClick = (card: WeatherCardMarker) => {
+    const data = initialDataMap.get(card.id);
+    if (data) {
+      // 해당 도 선택
+      if (data.province) {
+        setSelectedProvince(data.province);
+        // 해당 도의 관측소 필터링
+        const filtered = stations.filter(s => s.province === data.province);
+        setFilteredStations(filtered);
+      }
+      // 해당 관측소 선택
+      setSelectedStation(card.id);
+      setWeatherData(data);
+    }
+  };
 
   // 도 선택 변경 핸들러
   const handleProvinceChange = (newProvince: string) => {
@@ -332,7 +405,9 @@ const RdaWeatherSection: React.FC = () => {
         <div className="lg:col-span-1 min-h-[200px]">
           <MapVisualization
             markers={[]}
-            onMarkerClick={() => {}}
+            weatherCards={weatherCards}
+            onWeatherCardClick={handleWeatherCardClick}
+            selectedCardId={selectedStation}
           />
         </div>
       </div>
@@ -351,13 +426,14 @@ const KmaWeatherSection: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialDataMap, setInitialDataMap] = useState<Map<string, KmaWeatherData>>(new Map());
+  const [sidoRepRegions, setSidoRepRegions] = useState<Map<string, KmaWeatherData>>(new Map());
 
   // 실시간 데이터에서 지역 목록 추출 및 시도 목록 생성
   useEffect(() => {
     const fetchRealtimeData = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_BASE_URL}/api/kma/realtime/latest/pivot?limit=100`);
+        const response = await fetch(`${API_BASE_URL}/api/kma/realtime/latest/pivot?limit=500`);
         if (response.ok) {
           const data: KmaWeatherData[] = await response.json();
           if (data.length > 0) {
@@ -365,6 +441,9 @@ const KmaWeatherSection: React.FC = () => {
             const regionMap = new Map<string, KmaRegion>();
             const dataMap = new Map<string, KmaWeatherData>();
             const sidoSet = new Set<string>();
+
+            // 시도별 대표 지역 데이터 (각 시도에서 첫 번째 지역)
+            const repRegionMap = new Map<string, KmaWeatherData>();
 
             data.forEach(item => {
               if (!regionMap.has(item.region_name)) {
@@ -377,6 +456,10 @@ const KmaWeatherSection: React.FC = () => {
                 dataMap.set(item.region_name, item);
                 if (item.sido) {
                   sidoSet.add(item.sido);
+                  // 대상 시도에 해당하고, 아직 대표 지역이 없으면 추가
+                  if (KMA_TARGET_SIDOS.includes(item.sido) && !repRegionMap.has(item.sido)) {
+                    repRegionMap.set(item.sido, item);
+                  }
                 }
               }
             });
@@ -387,6 +470,7 @@ const KmaWeatherSection: React.FC = () => {
             setRegions(uniqueRegions);
             setSidos(uniqueSidos);
             setInitialDataMap(dataMap);
+            setSidoRepRegions(repRegionMap);
 
             // 첫 번째 시도 선택
             if (uniqueSidos.length > 0) {
@@ -419,6 +503,41 @@ const KmaWeatherSection: React.FC = () => {
     };
     fetchRealtimeData();
   }, []);
+
+  // 지도에 표시할 카드 마커 생성
+  const weatherCards: WeatherCardMarker[] = useMemo(() => {
+    const cards: WeatherCardMarker[] = [];
+    sidoRepRegions.forEach((data, sido) => {
+      const coords = KMA_SIDO_COORDINATES[sido];
+      if (coords && data.T1H !== null) {
+        cards.push({
+          id: data.region_name,
+          name: data.region_name,
+          temperature: data.T1H,
+          latitude: coords.lat,
+          longitude: coords.lng,
+        });
+      }
+    });
+    return cards;
+  }, [sidoRepRegions]);
+
+  // 카드 클릭 핸들러 - 해당 지역 기상 데이터로 변경
+  const handleWeatherCardClick = (card: WeatherCardMarker) => {
+    const data = initialDataMap.get(card.id);
+    if (data) {
+      // 해당 시도 선택
+      if (data.sido) {
+        setSelectedSido(data.sido);
+        // 해당 시도의 지역 필터링
+        const filtered = regions.filter(r => r.sido === data.sido);
+        setFilteredRegions(filtered);
+      }
+      // 해당 지역 선택
+      setSelectedRegion(card.id);
+      setWeatherData(data);
+    }
+  };
 
   // 시도 선택 변경 핸들러
   const handleSidoChange = (newSido: string) => {
@@ -587,7 +706,9 @@ const KmaWeatherSection: React.FC = () => {
         <div className="lg:col-span-1 min-h-[200px]">
           <MapVisualization
             markers={[]}
-            onMarkerClick={() => {}}
+            weatherCards={weatherCards}
+            onWeatherCardClick={handleWeatherCardClick}
+            selectedCardId={selectedRegion}
           />
         </div>
       </div>
