@@ -122,7 +122,7 @@ def get_daily_by_range(
     end_date: date = Query(description="종료 날짜"),
     stn_cd: Optional[str] = Query(default=None, description="관측소 코드"),
     offset: int = Query(default=0, ge=0),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=10000, description="조회 개수 (다운로드 시 최대 10000)"),
     db: Session = Depends(get_db)
 ):
     """

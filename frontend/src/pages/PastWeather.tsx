@@ -458,54 +458,113 @@ const PastWeather = () => {
     }
   };
 
-  // CSV 다운로드
-  const handleDownloadCSV = () => {
-    if (queryResults.length === 0) return;
+  // 다운로드 로딩 상태
+  const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
 
-    let csvContent = '';
+  // RDA 데이터를 CSV/Excel 문자열로 변환
+  const convertRdaDataToString = (data: RdaDailyData[], format: 'csv' | 'excel'): string => {
+    const separator = format === 'csv' ? ',' : '\t';
+    let content = `관측소코드${separator}관측소명${separator}날짜${separator}평균기온${separator}최고기온${separator}최저기온${separator}평균습도${separator}평균풍속${separator}강수량${separator}일사량\n`;
+    data.forEach(row => {
+      content += `${row.stn_cd}${separator}${row.stn_name}${separator}${row.date}${separator}${row.temp ?? ''}${separator}${row.hghst_artmp ?? ''}${separator}${row.lowst_artmp ?? ''}${separator}${row.hum ?? ''}${separator}${row.wind ?? ''}${separator}${row.rn ?? ''}${separator}${row.srqty ?? ''}\n`;
+    });
+    return content;
+  };
 
-    if (institution === 'RDA') {
-      csvContent = '관측소코드,관측소명,날짜,평균기온,최고기온,최저기온,평균습도,평균풍속,강수량,일사량\n';
-      (queryResults as RdaDailyData[]).forEach(row => {
-        csvContent += `${row.stn_cd},${row.stn_name},${row.date},${row.temp ?? ''},${row.hghst_artmp ?? ''},${row.lowst_artmp ?? ''},${row.hum ?? ''},${row.wind ?? ''},${row.rn ?? ''},${row.srqty ?? ''}\n`;
-      });
-    } else {
-      csvContent = '지역명,날짜,시간,기온,습도,풍속,풍향,강수량\n';
-      (queryResults as KmaWeatherData[]).forEach(row => {
-        csvContent += `${row.region_name},${row.base_date},${row.base_time},${row.T1H ?? ''},${row.REH ?? ''},${row.WSD ?? ''},${row.VEC ?? ''},${row.RN1 ?? ''}\n`;
-      });
-    }
+  // KMA 데이터를 CSV/Excel 문자열로 변환
+  const convertKmaDataToString = (data: KmaWeatherData[], format: 'csv' | 'excel'): string => {
+    const separator = format === 'csv' ? ',' : '\t';
+    let content = `지역명${separator}날짜${separator}시간${separator}기온${separator}습도${separator}풍속${separator}풍향${separator}강수량\n`;
+    data.forEach(row => {
+      content += `${row.region_name}${separator}${row.base_date}${separator}${row.base_time}${separator}${row.T1H ?? ''}${separator}${row.REH ?? ''}${separator}${row.WSD ?? ''}${separator}${row.VEC ?? ''}${separator}${row.RN1 ?? ''}\n`;
+    });
+    return content;
+  };
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  // 파일 다운로드 실행
+  const downloadFile = (content: string, filename: string, format: 'csv' | 'excel') => {
+    const mimeType = format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/vnd.ms-excel;charset=utf-8;';
+    const extension = format === 'csv' ? 'csv' : 'xls';
+    const blob = new Blob(['\ufeff' + content], { type: mimeType });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `weather_data_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `${filename}.${extension}`;
     link.click();
   };
 
-  // Excel 다운로드
-  const handleDownloadExcel = () => {
-    if (queryResults.length === 0) return;
+  // 조회 기간 데이터 다운로드
+  const handleDownloadRange = async (format: 'csv' | 'excel') => {
+    if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) return;
 
-    let csvContent = '';
+    const startDateStr = `${startYear}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+    const endDateStr = `${endYear}-${String(endMonth).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
 
-    if (institution === 'RDA') {
-      csvContent = '관측소코드\t관측소명\t날짜\t평균기온\t최고기온\t최저기온\t평균습도\t평균풍속\t강수량\t일사량\n';
-      (queryResults as RdaDailyData[]).forEach(row => {
-        csvContent += `${row.stn_cd}\t${row.stn_name}\t${row.date}\t${row.temp ?? ''}\t${row.hghst_artmp ?? ''}\t${row.lowst_artmp ?? ''}\t${row.hum ?? ''}\t${row.wind ?? ''}\t${row.rn ?? ''}\t${row.srqty ?? ''}\n`;
-      });
-    } else {
-      csvContent = '지역명\t날짜\t시간\t기온\t습도\t풍속\t풍향\t강수량\n';
-      (queryResults as KmaWeatherData[]).forEach(row => {
-        csvContent += `${row.region_name}\t${row.base_date}\t${row.base_time}\t${row.T1H ?? ''}\t${row.REH ?? ''}\t${row.WSD ?? ''}\t${row.VEC ?? ''}\t${row.RN1 ?? ''}\n`;
-      });
+    setDownloadLoading(`range-${format}`);
+
+    try {
+      if (institution === 'RDA' && selectedRdaStation) {
+        const response = await fetch(
+          `${API_BASE_URL}/api/rda/weather/daily/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_cd=${selectedRdaStation}&limit=10000`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const content = convertRdaDataToString(data.data || [], format);
+          downloadFile(content, `weather_${selectedRdaStation}_${startDateStr}_${endDateStr}`, format);
+        }
+      } else if (institution === 'KMA' && selectedKmaRegion) {
+        const response = await fetch(
+          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}?target_date=${startDateStr}&limit=10000`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const content = convertKmaDataToString(data.data || [], format);
+          downloadFile(content, `weather_${selectedKmaRegion}_${startDateStr}_${endDateStr}`, format);
+        }
+      }
+    } catch (err) {
+      console.error('다운로드 실패:', err);
+      setError('다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setDownloadLoading(null);
     }
+  };
 
-    const blob = new Blob(['\ufeff' + csvContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `weather_data_${new Date().toISOString().split('T')[0]}.xls`;
-    link.click();
+  // 전체 기간 데이터 다운로드
+  const handleDownloadAll = async (format: 'csv' | 'excel') => {
+    if (!dataStartDate || !dataEndDate) return;
+
+    const startDateStr = formatDate(dataStartDate);
+    const endDateStr = formatDate(dataEndDate);
+
+    setDownloadLoading(`all-${format}`);
+
+    try {
+      if (institution === 'RDA' && selectedRdaStation) {
+        const response = await fetch(
+          `${API_BASE_URL}/api/rda/weather/daily/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_cd=${selectedRdaStation}&limit=10000`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const content = convertRdaDataToString(data.data || [], format);
+          const station = rdaStations.find(s => s.stn_cd === selectedRdaStation);
+          downloadFile(content, `weather_${station?.stn_name || selectedRdaStation}_전체기간`, format);
+        }
+      } else if (institution === 'KMA' && selectedKmaRegion) {
+        const response = await fetch(
+          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}?limit=10000`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          const content = convertKmaDataToString(data.data || [], format);
+          downloadFile(content, `weather_${selectedKmaRegion}_전체기간`, format);
+        }
+      }
+    } catch (err) {
+      console.error('다운로드 실패:', err);
+      setError('다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setDownloadLoading(null);
+    }
   };
 
   // 조회 가능 여부
@@ -710,27 +769,65 @@ const PastWeather = () => {
       {/* Results Section */}
       {showResults && (
         <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-gray-800">
-              조회 결과 <span className="text-sm font-normal text-gray-500">(총 {totalCount}건 중 {queryResults.length}건 표시)</span>
-            </h3>
+          {/* 상단 정보 및 다운로드 */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-800">
+                조회 결과 <span className="text-sm font-normal text-gray-500">(총 {totalCount}건 중 {queryResults.length}건 미리보기)</span>
+              </h3>
+            </div>
 
-            {/* 다운로드 버튼 */}
-            <div className="flex gap-2">
-              <button
-                onClick={handleDownloadCSV}
-                disabled={queryResults.length === 0}
-                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                CSV 다운로드
-              </button>
-              <button
-                onClick={handleDownloadExcel}
-                disabled={queryResults.length === 0}
-                className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-              >
-                Excel 다운로드
-              </button>
+            {/* 데이터 기간 정보 */}
+            {dataStartDate && dataEndDate && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">데이터 보유 기간:</span> {formatDate(dataStartDate)} ~ {formatDate(dataEndDate)}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">현재 조회 기간:</span> {startYear}-{String(startMonth).padStart(2, '0')}-{String(startDay).padStart(2, '0')} ~ {endYear}-{String(endMonth).padStart(2, '0')}-{String(endDay).padStart(2, '0')}
+                </p>
+              </div>
+            )}
+
+            {/* 다운로드 버튼 그룹 */}
+            <div className="flex flex-wrap gap-4">
+              {/* 조회 기간 다운로드 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium">조회 기간 다운로드:</span>
+                <button
+                  onClick={() => handleDownloadRange('csv')}
+                  disabled={!canQuery || downloadLoading !== null}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {downloadLoading === 'range-csv' ? '다운로드 중...' : 'CSV'}
+                </button>
+                <button
+                  onClick={() => handleDownloadRange('excel')}
+                  disabled={!canQuery || downloadLoading !== null}
+                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {downloadLoading === 'range-excel' ? '다운로드 중...' : 'Excel'}
+                </button>
+              </div>
+
+              {/* 전체 기간 다운로드 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 font-medium">전체 기간 다운로드:</span>
+                <button
+                  onClick={() => handleDownloadAll('csv')}
+                  disabled={!dataStartDate || !dataEndDate || downloadLoading !== null}
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {downloadLoading === 'all-csv' ? '다운로드 중...' : 'CSV'}
+                </button>
+                <button
+                  onClick={() => handleDownloadAll('excel')}
+                  disabled={!dataStartDate || !dataEndDate || downloadLoading !== null}
+                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                >
+                  {downloadLoading === 'all-excel' ? '다운로드 중...' : 'Excel'}
+                </button>
+              </div>
             </div>
           </div>
 
