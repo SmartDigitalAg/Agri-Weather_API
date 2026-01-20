@@ -157,6 +157,7 @@ def get_daily_by_range(
             "hum": r.hum,
             "wind": r.wind,
             "rn": r.rn,
+            "srqty": r.srqty,
         }
         for r in results
     ]

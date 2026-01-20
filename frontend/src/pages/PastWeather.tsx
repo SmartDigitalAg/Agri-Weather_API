@@ -37,6 +37,7 @@ interface RdaDailyData {
   hum: number | null;         // 평균습도
   wind: number | null;        // 평균풍속
   rn: number | null;          // 강수량
+  srqty: number | null;       // 일사량
 }
 
 // KMA 기상 데이터 (피벗)
@@ -464,9 +465,9 @@ const PastWeather = () => {
     let csvContent = '';
 
     if (institution === 'RDA') {
-      csvContent = '관측소코드,관측소명,날짜,평균기온,최고기온,최저기온,평균습도,평균풍속,강수량\n';
+      csvContent = '관측소코드,관측소명,날짜,평균기온,최고기온,최저기온,평균습도,평균풍속,강수량,일사량\n';
       (queryResults as RdaDailyData[]).forEach(row => {
-        csvContent += `${row.stn_cd},${row.stn_name},${row.date},${row.temp ?? ''},${row.hghst_artmp ?? ''},${row.lowst_artmp ?? ''},${row.hum ?? ''},${row.wind ?? ''},${row.rn ?? ''}\n`;
+        csvContent += `${row.stn_cd},${row.stn_name},${row.date},${row.temp ?? ''},${row.hghst_artmp ?? ''},${row.lowst_artmp ?? ''},${row.hum ?? ''},${row.wind ?? ''},${row.rn ?? ''},${row.srqty ?? ''}\n`;
       });
     } else {
       csvContent = '지역명,날짜,시간,기온,습도,풍속,풍향,강수량\n';
@@ -489,9 +490,9 @@ const PastWeather = () => {
     let csvContent = '';
 
     if (institution === 'RDA') {
-      csvContent = '관측소코드\t관측소명\t날짜\t평균기온\t최고기온\t최저기온\t평균습도\t평균풍속\t강수량\n';
+      csvContent = '관측소코드\t관측소명\t날짜\t평균기온\t최고기온\t최저기온\t평균습도\t평균풍속\t강수량\t일사량\n';
       (queryResults as RdaDailyData[]).forEach(row => {
-        csvContent += `${row.stn_cd}\t${row.stn_name}\t${row.date}\t${row.temp ?? ''}\t${row.hghst_artmp ?? ''}\t${row.lowst_artmp ?? ''}\t${row.hum ?? ''}\t${row.wind ?? ''}\t${row.rn ?? ''}\n`;
+        csvContent += `${row.stn_cd}\t${row.stn_name}\t${row.date}\t${row.temp ?? ''}\t${row.hghst_artmp ?? ''}\t${row.lowst_artmp ?? ''}\t${row.hum ?? ''}\t${row.wind ?? ''}\t${row.rn ?? ''}\t${row.srqty ?? ''}\n`;
       });
     } else {
       csvContent = '지역명\t날짜\t시간\t기온\t습도\t풍속\t풍향\t강수량\n';
@@ -747,7 +748,8 @@ const PastWeather = () => {
                       <th className="px-4 py-3 text-right font-medium text-gray-700">최저기온(°C)</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-700">평균습도(%)</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-700">평균풍속(m/s)</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">총강수량(mm)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">강수량(mm)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">일사량(MJ/m²)</th>
                     </>
                   ) : (
                     <>
@@ -765,7 +767,7 @@ const PastWeather = () => {
               <tbody>
                 {queryResults.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
+                    <td colSpan={9} className="px-4 py-8 text-center text-gray-500">
                       조회된 데이터가 없습니다.
                     </td>
                   </tr>
@@ -780,6 +782,7 @@ const PastWeather = () => {
                       <td className="px-4 py-3 text-right">{row.hum?.toFixed(1) ?? '-'}</td>
                       <td className="px-4 py-3 text-right">{row.wind?.toFixed(1) ?? '-'}</td>
                       <td className="px-4 py-3 text-right">{row.rn?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.srqty?.toFixed(1) ?? '-'}</td>
                     </tr>
                   ))
                 ) : (
