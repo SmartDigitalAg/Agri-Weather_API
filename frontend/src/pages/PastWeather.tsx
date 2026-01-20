@@ -14,12 +14,10 @@ interface RdaStation {
   last_date: string;
 }
 
-// KMA 지역 정보
-interface KmaRegion {
-  sido: string | null;
-  region_name: string;
-  nx: number;
-  ny: number;
+// KMA ASOS 관측소 정보
+interface KmaStation {
+  stn_id: number;
+  stn_nm: string;
   data_count: number;
   first_date: string;
   last_date: string;
@@ -40,17 +38,20 @@ interface RdaDailyData {
   srqty: number | null;       // 일사량
 }
 
-// KMA 기상 데이터 (피벗)
-interface KmaWeatherData {
-  sido: string | null;
-  region_name: string;
-  base_date: string;
-  base_time: string;
-  T1H: number | null;
-  RN1: number | null;
-  REH: number | null;
-  VEC: number | null;
-  WSD: number | null;
+// KMA ASOS 일별 기상 데이터
+interface KmaAsosData {
+  id: number;
+  stn_id: number;
+  stn_nm: string;
+  tm: string;             // 날짜
+  avg_ta: number | null;  // 평균기온
+  min_ta: number | null;  // 최저기온
+  max_ta: number | null;  // 최고기온
+  sum_rn: number | null;  // 일강수량
+  avg_ws: number | null;  // 평균풍속
+  avg_rhm: number | null; // 평균상대습도
+  sum_ss_hr: number | null; // 일조시간
+  sum_gsr: number | null;   // 일사량
 }
 
 // 2일 전 날짜 계산
@@ -188,12 +189,9 @@ const PastWeather = () => {
   const [filteredRdaStations, setFilteredRdaStations] = useState<RdaStation[]>([]);
   const [selectedRdaStation, setSelectedRdaStation] = useState<string>('');
 
-  // KMA 상태
-  const [kmaRegions, setKmaRegions] = useState<KmaRegion[]>([]);
-  const [kmaSidos, setKmaSidos] = useState<string[]>([]);
-  const [selectedKmaSido, setSelectedKmaSido] = useState<string>('');
-  const [filteredKmaRegions, setFilteredKmaRegions] = useState<KmaRegion[]>([]);
-  const [selectedKmaRegion, setSelectedKmaRegion] = useState<string>('');
+  // KMA ASOS 상태
+  const [kmaStations, setKmaStations] = useState<KmaStation[]>([]);
+  const [selectedKmaStation, setSelectedKmaStation] = useState<number | null>(null);
 
   // 데이터 기간 (선택된 관측소/지역 기준)
   const [dataStartDate, setDataStartDate] = useState<Date | null>(null);
@@ -208,7 +206,7 @@ const PastWeather = () => {
   const [endDay, setEndDay] = useState<number>(0);
 
   // 조회 결과
-  const [queryResults, setQueryResults] = useState<(RdaDailyData | KmaWeatherData)[]>([]);
+  const [queryResults, setQueryResults] = useState<(RdaDailyData | KmaAsosData)[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showResults, setShowResults] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
@@ -240,24 +238,20 @@ const PastWeather = () => {
     fetchRdaStations();
   }, []);
 
-  // KMA 지역 목록 로드
+  // KMA ASOS 관측소 목록 로드
   useEffect(() => {
-    const fetchKmaRegions = async () => {
+    const fetchKmaStations = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/kma/realtime/regions`);
+        const response = await fetch(`${API_BASE_URL}/api/kma/asos/stations`);
         if (response.ok) {
-          const data: KmaRegion[] = await response.json();
-          setKmaRegions(data);
-
-          // 시도 목록 추출
-          const sidos = [...new Set(data.map(r => r.sido).filter(Boolean))] as string[];
-          setKmaSidos(sidos.sort());
+          const data: KmaStation[] = await response.json();
+          setKmaStations(data);
         }
       } catch (err) {
-        console.error('KMA 지역 목록 로드 실패:', err);
+        console.error('KMA ASOS 관측소 목록 로드 실패:', err);
       }
     };
-    fetchKmaRegions();
+    fetchKmaStations();
   }, []);
 
   // RDA 도 선택 시 관측소 필터링
@@ -276,20 +270,6 @@ const PastWeather = () => {
       setFilteredRdaStations([]);
     }
   }, [selectedRdaProvince, rdaStations]);
-
-  // KMA 시도 선택 시 지역 필터링
-  useEffect(() => {
-    if (selectedKmaSido) {
-      const filtered = kmaRegions.filter(r => r.sido === selectedKmaSido);
-      setFilteredKmaRegions(filtered);
-      setSelectedKmaRegion('');
-      setDataStartDate(null);
-      setDataEndDate(null);
-      resetDateSelections();
-    } else {
-      setFilteredKmaRegions([]);
-    }
-  }, [selectedKmaSido, kmaRegions]);
 
   // 날짜 선택 초기화
   const resetDateSelections = () => {
@@ -333,14 +313,14 @@ const PastWeather = () => {
     }
   }, [selectedRdaStation, rdaStations]);
 
-  // KMA 지역 선택 시 데이터 기간 설정
+  // KMA ASOS 관측소 선택 시 데이터 기간 설정
   useEffect(() => {
-    if (selectedKmaRegion) {
-      const region = kmaRegions.find(r => r.region_name === selectedKmaRegion);
-      if (region && region.first_date && region.last_date) {
-        const dataStart = new Date(region.first_date);
+    if (selectedKmaStation) {
+      const station = kmaStations.find(s => s.stn_id === selectedKmaStation);
+      if (station && station.first_date && station.last_date) {
+        const dataStart = new Date(station.first_date);
         const twoDaysAgo = getTwoDaysAgo();
-        const lastDate = new Date(region.last_date);
+        const lastDate = new Date(station.last_date);
 
         // 종료일은 2일 전과 last_date 중 더 이른 날짜
         const end = twoDaysAgo < lastDate ? twoDaysAgo : lastDate;
@@ -363,7 +343,7 @@ const PastWeather = () => {
         setEndDay(end.getDate());
       }
     }
-  }, [selectedKmaRegion, kmaRegions]);
+  }, [selectedKmaStation, kmaStations]);
 
   // 기관 변경 시 초기화
   useEffect(() => {
@@ -373,8 +353,7 @@ const PastWeather = () => {
     setDataEndDate(null);
     resetDateSelections();
     if (institution === 'RDA') {
-      setSelectedKmaSido('');
-      setSelectedKmaRegion('');
+      setSelectedKmaStation(null);
     } else {
       setSelectedRdaProvince('');
       setSelectedRdaStation('');
@@ -435,10 +414,10 @@ const PastWeather = () => {
           const errorData = await response.json();
           setError(errorData.detail || '데이터 조회 실패');
         }
-      } else if (institution === 'KMA' && selectedKmaRegion) {
-        // KMA 기간 데이터 조회 (피벗)
+      } else if (institution === 'KMA' && selectedKmaStation) {
+        // KMA ASOS 일별 데이터 조회
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}/range?start_date=${startDateStr}&end_date=${endDateStr}&limit=20`
+          `${API_BASE_URL}/api/kma/asos/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_id=${selectedKmaStation}&limit=20`
         );
         if (response.ok) {
           const data = await response.json();
@@ -471,12 +450,12 @@ const PastWeather = () => {
     return content;
   };
 
-  // KMA 데이터를 CSV/Excel 문자열로 변환
-  const convertKmaDataToString = (data: KmaWeatherData[], format: 'csv' | 'excel'): string => {
+  // KMA ASOS 데이터를 CSV/Excel 문자열로 변환
+  const convertKmaDataToString = (data: KmaAsosData[], format: 'csv' | 'excel'): string => {
     const separator = format === 'csv' ? ',' : '\t';
-    let content = `지역명${separator}날짜${separator}시간${separator}기온${separator}습도${separator}풍속${separator}풍향${separator}강수량\n`;
+    let content = `지점ID${separator}지점명${separator}날짜${separator}평균기온${separator}최고기온${separator}최저기온${separator}평균습도${separator}평균풍속${separator}강수량${separator}일사량\n`;
     data.forEach(row => {
-      content += `${row.region_name}${separator}${row.base_date}${separator}${row.base_time}${separator}${row.T1H ?? ''}${separator}${row.REH ?? ''}${separator}${row.WSD ?? ''}${separator}${row.VEC ?? ''}${separator}${row.RN1 ?? ''}\n`;
+      content += `${row.stn_id}${separator}${row.stn_nm}${separator}${row.tm}${separator}${row.avg_ta ?? ''}${separator}${row.max_ta ?? ''}${separator}${row.min_ta ?? ''}${separator}${row.avg_rhm ?? ''}${separator}${row.avg_ws ?? ''}${separator}${row.sum_rn ?? ''}${separator}${row.sum_gsr ?? ''}\n`;
     });
     return content;
   };
@@ -511,14 +490,15 @@ const PastWeather = () => {
           const content = convertRdaDataToString(data.data || [], format);
           downloadFile(content, `weather_${selectedRdaStation}_${startDateStr}_${endDateStr}`, format);
         }
-      } else if (institution === 'KMA' && selectedKmaRegion) {
+      } else if (institution === 'KMA' && selectedKmaStation) {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}/range?start_date=${startDateStr}&end_date=${endDateStr}&limit=10000`
+          `${API_BASE_URL}/api/kma/asos/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_id=${selectedKmaStation}&limit=10000`
         );
         if (response.ok) {
           const data = await response.json();
           const content = convertKmaDataToString(data.data || [], format);
-          downloadFile(content, `weather_${selectedKmaRegion}_${startDateStr}_${endDateStr}`, format);
+          const station = kmaStations.find(s => s.stn_id === selectedKmaStation);
+          downloadFile(content, `weather_${station?.stn_nm || selectedKmaStation}_${startDateStr}_${endDateStr}`, format);
         }
       }
     } catch (err) {
@@ -549,14 +529,15 @@ const PastWeather = () => {
           const station = rdaStations.find(s => s.stn_cd === selectedRdaStation);
           downloadFile(content, `weather_${station?.stn_name || selectedRdaStation}_전체기간`, format);
         }
-      } else if (institution === 'KMA' && selectedKmaRegion) {
+      } else if (institution === 'KMA' && selectedKmaStation) {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedKmaRegion)}/range?start_date=${startDateStr}&end_date=${endDateStr}&limit=10000`
+          `${API_BASE_URL}/api/kma/asos/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_id=${selectedKmaStation}&limit=10000`
         );
         if (response.ok) {
           const data = await response.json();
           const content = convertKmaDataToString(data.data || [], format);
-          downloadFile(content, `weather_${selectedKmaRegion}_전체기간`, format);
+          const station = kmaStations.find(s => s.stn_id === selectedKmaStation);
+          downloadFile(content, `weather_${station?.stn_nm || selectedKmaStation}_전체기간`, format);
         }
       }
     } catch (err) {
@@ -570,7 +551,7 @@ const PastWeather = () => {
   // 조회 가능 여부
   const canQuery = institution === 'RDA'
     ? selectedRdaStation && startYear && startMonth && startDay && endYear && endMonth && endDay
-    : selectedKmaRegion && startYear && startMonth && startDay && endYear && endMonth && endDay;
+    : selectedKmaStation && startYear && startMonth && startDay && endYear && endMonth && endDay;
 
   return (
     <div className="flex flex-col gap-4 h-full">
@@ -625,29 +606,16 @@ const PastWeather = () => {
                   </select>
                 </>
               ) : (
-                <>
-                  <select
-                    value={selectedKmaSido}
-                    onChange={(e) => setSelectedKmaSido(e.target.value)}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">도 선택</option>
-                    {kmaSidos.map(sido => (
-                      <option key={sido} value={sido}>{sido}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedKmaRegion}
-                    onChange={(e) => setSelectedKmaRegion(e.target.value)}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    disabled={!selectedKmaSido}
-                  >
-                    <option value="">시/군 선택</option>
-                    {filteredKmaRegions.map(region => (
-                      <option key={region.region_name} value={region.region_name}>{region.region_name}</option>
-                    ))}
-                  </select>
-                </>
+                <select
+                  value={selectedKmaStation || ''}
+                  onChange={(e) => setSelectedKmaStation(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                >
+                  <option value="">관측소 선택</option>
+                  {kmaStations.map(station => (
+                    <option key={station.stn_id} value={station.stn_id}>{station.stn_nm}</option>
+                  ))}
+                </select>
               )}
             </div>
           </div>
@@ -850,13 +818,15 @@ const PastWeather = () => {
                     </>
                   ) : (
                     <>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">지역</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">관측소</th>
                       <th className="px-4 py-3 text-left font-medium text-gray-700">날짜</th>
-                      <th className="px-4 py-3 text-left font-medium text-gray-700">시간</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">기온(°C)</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">습도(%)</th>
-                      <th className="px-4 py-3 text-right font-medium text-gray-700">풍속(m/s)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">평균기온(°C)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">최고기온(°C)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">최저기온(°C)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">평균습도(%)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">평균풍속(m/s)</th>
                       <th className="px-4 py-3 text-right font-medium text-gray-700">강수량(mm)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">일사량(MJ/m²)</th>
                     </>
                   )}
                 </tr>
@@ -883,15 +853,17 @@ const PastWeather = () => {
                     </tr>
                   ))
                 ) : (
-                  (queryResults as KmaWeatherData[]).map((row, index) => (
+                  (queryResults as KmaAsosData[]).map((row, index) => (
                     <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-3">{row.region_name}</td>
-                      <td className="px-4 py-3">{row.base_date}</td>
-                      <td className="px-4 py-3">{row.base_time?.slice(0, 2)}:{row.base_time?.slice(2, 4)}</td>
-                      <td className="px-4 py-3 text-right">{row.T1H?.toFixed(1) ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.REH?.toFixed(0) ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.WSD?.toFixed(1) ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.RN1?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3">{row.stn_nm}</td>
+                      <td className="px-4 py-3">{row.tm}</td>
+                      <td className="px-4 py-3 text-right">{row.avg_ta?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.max_ta?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.min_ta?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.avg_rhm?.toFixed(0) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.avg_ws?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.sum_rn?.toFixed(1) ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.sum_gsr?.toFixed(1) ?? '-'}</td>
                     </tr>
                   ))
                 )}
