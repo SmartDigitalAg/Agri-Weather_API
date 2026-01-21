@@ -11,7 +11,7 @@ from ..database import Base
 
 
 class AsosDailyData(Base):
-    """ASOS 일자료 테이블 모델"""
+    """ASOS 일자료 테이블 모델 (필수 필드만)"""
     __tablename__ = "asos_daily_data"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -25,17 +25,10 @@ class AsosDailyData(Base):
     max_ta_hrmt = Column(String(4))  # 최고기온 시각
     sum_rn = Column(Float)  # 일강수량
     avg_ws = Column(Float)  # 평균풍속
-    avg_td = Column(Float)  # 평균이슬점온도
-    min_rhm_hrmt = Column(String(4))  # 최저습도 시각
     avg_rhm = Column(Integer)  # 평균상대습도
     sum_ss_hr = Column(Float)  # 일조시간
     sum_gsr = Column(Float)  # 일사량
-    dd_mes = Column(Float)  # 적설량
     avg_tca = Column(Float)  # 평균전운량
-    avg_ts = Column(Float)  # 평균지면온도
-    sum_lrg_ev = Column(Float)  # 대형증발량
-    sum_sml_ev = Column(Float)  # 소형증발량
-    n99_rn = Column(Float)  # 9-9강수량
     iscs = Column(Text)  # 일기현상
     created_at = Column(TIMESTAMP, server_default=func.now())
 
