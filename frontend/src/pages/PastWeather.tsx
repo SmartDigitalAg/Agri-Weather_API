@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import * as XLSX from 'xlsx';
+import PastWeatherMap from '../components/PastWeatherMap';
 
 const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
 
@@ -193,6 +195,10 @@ const PastWeather = () => {
   const [kmaStations, setKmaStations] = useState<KmaStation[]>([]);
   const [selectedKmaStation, setSelectedKmaStation] = useState<number | null>(null);
 
+  // 관측소 목록 로딩 상태
+  const [rdaStationsLoading, setRdaStationsLoading] = useState<boolean>(true);
+  const [kmaStationsLoading, setKmaStationsLoading] = useState<boolean>(true);
+
   // 데이터 기간 (선택된 관측소/지역 기준)
   const [dataStartDate, setDataStartDate] = useState<Date | null>(null);
   const [dataEndDate, setDataEndDate] = useState<Date | null>(null);
@@ -215,6 +221,7 @@ const PastWeather = () => {
   // RDA 관측소 목록 로드 (일별 데이터 기준)
   useEffect(() => {
     const fetchRdaStations = async () => {
+      setRdaStationsLoading(true);
       try {
         const response = await fetch(`${API_BASE_URL}/api/rda/weather/stations`);
         if (response.ok) {
@@ -233,6 +240,8 @@ const PastWeather = () => {
         }
       } catch (err) {
         console.error('RDA 관측소 목록 로드 실패:', err);
+      } finally {
+        setRdaStationsLoading(false);
       }
     };
     fetchRdaStations();
@@ -241,6 +250,7 @@ const PastWeather = () => {
   // KMA ASOS 관측소 목록 로드
   useEffect(() => {
     const fetchKmaStations = async () => {
+      setKmaStationsLoading(true);
       try {
         const response = await fetch(`${API_BASE_URL}/api/kma/asos/stations`);
         if (response.ok) {
@@ -249,6 +259,8 @@ const PastWeather = () => {
         }
       } catch (err) {
         console.error('KMA ASOS 관측소 목록 로드 실패:', err);
+      } finally {
+        setKmaStationsLoading(false);
       }
     };
     fetchKmaStations();
@@ -440,35 +452,85 @@ const PastWeather = () => {
   // 다운로드 로딩 상태
   const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
 
-  // RDA 데이터를 CSV/Excel 문자열로 변환
-  const convertRdaDataToString = (data: RdaDailyData[], format: 'csv' | 'excel'): string => {
-    const separator = format === 'csv' ? ',' : '\t';
-    let content = `관측소코드${separator}관측소명${separator}날짜${separator}평균기온${separator}최고기온${separator}최저기온${separator}평균습도${separator}평균풍속${separator}강수량${separator}일사량\n`;
+  // 지도 연도 슬라이더 상태
+  const [mapYear, setMapYear] = useState<number>(2024);
+
+  // RDA 데이터를 CSV 문자열로 변환
+  const convertRdaDataToCsv = (data: RdaDailyData[]): string => {
+    let content = `관측소코드,관측소명,날짜,평균기온,최고기온,최저기온,평균습도,평균풍속,강수량,일사량\n`;
     data.forEach(row => {
-      content += `${row.stn_cd}${separator}${row.stn_name}${separator}${row.date}${separator}${row.temp ?? ''}${separator}${row.hghst_artmp ?? ''}${separator}${row.lowst_artmp ?? ''}${separator}${row.hum ?? ''}${separator}${row.wind ?? ''}${separator}${row.rn ?? ''}${separator}${row.srqty ?? ''}\n`;
+      content += `${row.stn_cd},${row.stn_name},${row.date},${row.temp ?? ''},${row.hghst_artmp ?? ''},${row.lowst_artmp ?? ''},${row.hum ?? ''},${row.wind ?? ''},${row.rn ?? ''},${row.srqty ?? ''}\n`;
     });
     return content;
   };
 
-  // KMA ASOS 데이터를 CSV/Excel 문자열로 변환
-  const convertKmaDataToString = (data: KmaAsosData[], format: 'csv' | 'excel'): string => {
-    const separator = format === 'csv' ? ',' : '\t';
-    let content = `지점ID${separator}지점명${separator}날짜${separator}평균기온${separator}최고기온${separator}최저기온${separator}평균습도${separator}평균풍속${separator}강수량${separator}일사량\n`;
+  // KMA ASOS 데이터를 CSV 문자열로 변환
+  const convertKmaDataToCsv = (data: KmaAsosData[]): string => {
+    let content = `지점ID,지점명,날짜,평균기온,최고기온,최저기온,평균습도,평균풍속,강수량,일사량\n`;
     data.forEach(row => {
-      content += `${row.stn_id}${separator}${row.stn_nm}${separator}${row.tm}${separator}${row.avg_ta ?? ''}${separator}${row.max_ta ?? ''}${separator}${row.min_ta ?? ''}${separator}${row.avg_rhm ?? ''}${separator}${row.avg_ws ?? ''}${separator}${row.sum_rn ?? ''}${separator}${row.sum_gsr ?? ''}\n`;
+      content += `${row.stn_id},${row.stn_nm},${row.tm},${row.avg_ta ?? ''},${row.max_ta ?? ''},${row.min_ta ?? ''},${row.avg_rhm ?? ''},${row.avg_ws ?? ''},${row.sum_rn ?? ''},${row.sum_gsr ?? ''}\n`;
     });
     return content;
   };
 
-  // 파일 다운로드 실행
-  const downloadFile = (content: string, filename: string, format: 'csv' | 'excel') => {
-    const mimeType = format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/vnd.ms-excel;charset=utf-8;';
-    const extension = format === 'csv' ? 'csv' : 'xls';
-    const blob = new Blob(['\ufeff' + content], { type: mimeType });
+  // RDA 데이터를 Excel 워크북으로 변환
+  const convertRdaDataToExcel = (data: RdaDailyData[]): XLSX.WorkBook => {
+    const wsData = [
+      ['관측소코드', '관측소명', '날짜', '평균기온', '최고기온', '최저기온', '평균습도', '평균풍속', '강수량', '일사량'],
+      ...data.map(row => [
+        row.stn_cd,
+        row.stn_name,
+        row.date,
+        row.temp ?? '',
+        row.hghst_artmp ?? '',
+        row.lowst_artmp ?? '',
+        row.hum ?? '',
+        row.wind ?? '',
+        row.rn ?? '',
+        row.srqty ?? ''
+      ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '기상데이터');
+    return wb;
+  };
+
+  // KMA ASOS 데이터를 Excel 워크북으로 변환
+  const convertKmaDataToExcel = (data: KmaAsosData[]): XLSX.WorkBook => {
+    const wsData = [
+      ['지점ID', '지점명', '날짜', '평균기온', '최고기온', '최저기온', '평균습도', '평균풍속', '강수량', '일사량'],
+      ...data.map(row => [
+        row.stn_id,
+        row.stn_nm,
+        row.tm,
+        row.avg_ta ?? '',
+        row.max_ta ?? '',
+        row.min_ta ?? '',
+        row.avg_rhm ?? '',
+        row.avg_ws ?? '',
+        row.sum_rn ?? '',
+        row.sum_gsr ?? ''
+      ])
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '기상데이터');
+    return wb;
+  };
+
+  // CSV 파일 다운로드
+  const downloadCsv = (content: string, filename: string) => {
+    const blob = new Blob(['\ufeff' + content], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${filename}.${extension}`;
+    link.download = `${filename}.csv`;
     link.click();
+  };
+
+  // Excel 파일 다운로드
+  const downloadExcel = (workbook: XLSX.WorkBook, filename: string) => {
+    XLSX.writeFile(workbook, `${filename}.xlsx`);
   };
 
   // 조회 기간 데이터 다운로드
@@ -487,8 +549,14 @@ const PastWeather = () => {
         );
         if (response.ok) {
           const data = await response.json();
-          const content = convertRdaDataToString(data.data || [], format);
-          downloadFile(content, `weather_${selectedRdaStation}_${startDateStr}_${endDateStr}`, format);
+          const filename = `weather_${selectedRdaStation}_${startDateStr}_${endDateStr}`;
+          if (format === 'csv') {
+            const content = convertRdaDataToCsv(data.data || []);
+            downloadCsv(content, filename);
+          } else {
+            const workbook = convertRdaDataToExcel(data.data || []);
+            downloadExcel(workbook, filename);
+          }
         }
       } else if (institution === 'KMA' && selectedKmaStation) {
         const response = await fetch(
@@ -496,9 +564,15 @@ const PastWeather = () => {
         );
         if (response.ok) {
           const data = await response.json();
-          const content = convertKmaDataToString(data.data || [], format);
           const station = kmaStations.find(s => s.stn_id === selectedKmaStation);
-          downloadFile(content, `weather_${station?.stn_nm || selectedKmaStation}_${startDateStr}_${endDateStr}`, format);
+          const filename = `weather_${station?.stn_nm || selectedKmaStation}_${startDateStr}_${endDateStr}`;
+          if (format === 'csv') {
+            const content = convertKmaDataToCsv(data.data || []);
+            downloadCsv(content, filename);
+          } else {
+            const workbook = convertKmaDataToExcel(data.data || []);
+            downloadExcel(workbook, filename);
+          }
         }
       }
     } catch (err) {
@@ -509,40 +583,83 @@ const PastWeather = () => {
     }
   };
 
-  // 전체 기간 데이터 다운로드
+  // 전체 기간 데이터 다운로드 (최근 10년으로 제한)
   const handleDownloadAll = async (format: 'csv' | 'excel') => {
     if (!dataStartDate || !dataEndDate) return;
 
-    const startDateStr = formatDate(dataStartDate);
+    // 전체 기간이 너무 길면 최근 10년으로 제한 (약 3650일)
+    const tenYearsAgo = new Date(dataEndDate);
+    tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+    const effectiveStartDate = tenYearsAgo > dataStartDate ? tenYearsAgo : dataStartDate;
+
+    const startDateStr = formatDate(effectiveStartDate);
     const endDateStr = formatDate(dataEndDate);
 
+    // 다운로드 범위 알림
+    if (effectiveStartDate > dataStartDate) {
+      const confirmed = window.confirm(
+        `전체 데이터가 너무 많아 최근 10년 데이터만 다운로드합니다.\n` +
+        `(${startDateStr} ~ ${endDateStr})\n\n` +
+        `계속하시겠습니까?`
+      );
+      if (!confirmed) return;
+    }
+
     setDownloadLoading(`all-${format}`);
+    setError(null);
 
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60초 타임아웃
+
       if (institution === 'RDA' && selectedRdaStation) {
         const response = await fetch(
-          `${API_BASE_URL}/api/rda/weather/daily/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_cd=${selectedRdaStation}&limit=10000`
+          `${API_BASE_URL}/api/rda/weather/daily/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_cd=${selectedRdaStation}&limit=10000`,
+          { signal: controller.signal }
         );
+        clearTimeout(timeoutId);
         if (response.ok) {
           const data = await response.json();
-          const content = convertRdaDataToString(data.data || [], format);
           const station = rdaStations.find(s => s.stn_cd === selectedRdaStation);
-          downloadFile(content, `weather_${station?.stn_name || selectedRdaStation}_전체기간`, format);
+          const filename = `weather_${station?.stn_name || selectedRdaStation}_${startDateStr}_${endDateStr}`;
+          if (format === 'csv') {
+            const content = convertRdaDataToCsv(data.data || []);
+            downloadCsv(content, filename);
+          } else {
+            const workbook = convertRdaDataToExcel(data.data || []);
+            downloadExcel(workbook, filename);
+          }
+        } else {
+          setError('서버 오류가 발생했습니다.');
         }
       } else if (institution === 'KMA' && selectedKmaStation) {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/asos/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_id=${selectedKmaStation}&limit=10000`
+          `${API_BASE_URL}/api/kma/asos/range?start_date=${startDateStr}&end_date=${endDateStr}&stn_id=${selectedKmaStation}&limit=10000`,
+          { signal: controller.signal }
         );
+        clearTimeout(timeoutId);
         if (response.ok) {
           const data = await response.json();
-          const content = convertKmaDataToString(data.data || [], format);
           const station = kmaStations.find(s => s.stn_id === selectedKmaStation);
-          downloadFile(content, `weather_${station?.stn_nm || selectedKmaStation}_전체기간`, format);
+          const filename = `weather_${station?.stn_nm || selectedKmaStation}_${startDateStr}_${endDateStr}`;
+          if (format === 'csv') {
+            const content = convertKmaDataToCsv(data.data || []);
+            downloadCsv(content, filename);
+          } else {
+            const workbook = convertKmaDataToExcel(data.data || []);
+            downloadExcel(workbook, filename);
+          }
+        } else {
+          setError('서버 오류가 발생했습니다.');
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('다운로드 실패:', err);
-      setError('다운로드 중 오류가 발생했습니다.');
+      if (err.name === 'AbortError') {
+        setError('요청 시간이 초과되었습니다. 조회 기간을 줄여서 다시 시도해주세요.');
+      } else {
+        setError('다운로드 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.');
+      }
     } finally {
       setDownloadLoading(null);
     }
@@ -553,71 +670,99 @@ const PastWeather = () => {
     ? selectedRdaStation && startYear && startMonth && startDay && endYear && endMonth && endDay
     : selectedKmaStation && startYear && startMonth && startDay && endYear && endMonth && endDay;
 
+  // 지도에서 위치 선택 시 핸들러
+  const handleMapLocationSelect = (
+    selectedInstitution: 'RDA' | 'KMA',
+    station: RdaStation | KmaStation
+  ) => {
+    if (selectedInstitution === 'RDA') {
+      const rdaStation = station as RdaStation;
+      setInstitution('RDA');
+      // RDA 지역 선택: 관측소명에서 도 추출 후 설정
+      const province = getProvinceFromStationName(rdaStation.stn_name);
+      setSelectedRdaProvince(province);
+      // 약간의 지연 후 관측소 선택 (도 선택 후 필터링이 완료되어야 함)
+      setTimeout(() => {
+        setSelectedRdaStation(rdaStation.stn_cd);
+      }, 100);
+    } else {
+      const kmaStation = station as KmaStation;
+      setInstitution('KMA');
+      setSelectedKmaStation(kmaStation.stn_id);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 h-full">
       {/* Page Title */}
       <h2 className="text-base font-medium text-gray-600">과거기상현황</h2>
 
-      {/* Data Selection Section */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-base font-semibold text-gray-800 mb-4">데이터 선택</h3>
+      {/* Top Section: Data Selection | Map */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Data Selection Section */}
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-base font-semibold text-gray-800 mb-4">데이터 선택</h3>
 
-        {/* 기관 및 지역 선택 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* 기관 선택 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">기관</label>
-            <select
-              value={institution}
-              onChange={(e) => setInstitution(e.target.value as Institution)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-            >
-              <option value="RDA">국립농업과학원 (RDA)</option>
-              <option value="KMA">기상청 (KMA)</option>
-            </select>
-          </div>
+        {/* 기관 선택 */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">기관</label>
+          <select
+            value={institution}
+            onChange={(e) => setInstitution(e.target.value as Institution)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+          >
+            <option value="RDA">국립농업과학원 (RDA)</option>
+            <option value="KMA">기상청 (KMA)</option>
+          </select>
+        </div>
 
-          {/* 지역 선택 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">지역</label>
-            <div className="flex gap-2">
-              {institution === 'RDA' ? (
-                <>
-                  <select
-                    value={selectedRdaProvince}
-                    onChange={(e) => setSelectedRdaProvince(e.target.value)}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                  >
-                    <option value="">도 선택</option>
-                    {rdaProvinces.map(province => (
-                      <option key={province} value={province}>{province}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedRdaStation}
-                    onChange={(e) => setSelectedRdaStation(e.target.value)}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    disabled={!selectedRdaProvince}
-                  >
-                    <option value="">시/군 선택</option>
-                    {filteredRdaStations.map(station => (
-                      <option key={station.stn_cd} value={station.stn_cd}>{station.stn_name}</option>
-                    ))}
-                  </select>
-                </>
-              ) : (
+        {/* 지역 선택 */}
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            지역
+            {((institution === 'RDA' && rdaStationsLoading) || (institution === 'KMA' && kmaStationsLoading)) && (
+              <span className="ml-2 text-xs text-gray-500">로딩 중...</span>
+            )}
+          </label>
+          <div className="flex gap-2">
+            {institution === 'RDA' ? (
+              <>
                 <select
-                  value={selectedKmaStation || ''}
-                  onChange={(e) => setSelectedKmaStation(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  value={selectedRdaProvince}
+                  onChange={(e) => setSelectedRdaProvince(e.target.value)}
+                  className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100"
+                  disabled={rdaStationsLoading}
                 >
-                  <option value="">관측소 선택</option>
-                  {kmaStations.map(station => (
-                    <option key={station.stn_id} value={station.stn_id}>{station.stn_nm}</option>
+                  <option value="">{rdaStationsLoading ? '로딩 중...' : '도 선택'}</option>
+                  {rdaProvinces.map(province => (
+                    <option key={province} value={province}>{province}</option>
                   ))}
                 </select>
-              )}
-            </div>
+                <select
+                  value={selectedRdaStation}
+                  onChange={(e) => setSelectedRdaStation(e.target.value)}
+                  className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100"
+                  disabled={!selectedRdaProvince || rdaStationsLoading}
+                >
+                  <option value="">시/군 선택</option>
+                  {filteredRdaStations.map(station => (
+                    <option key={station.stn_cd} value={station.stn_cd}>{station.stn_name}</option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <select
+                value={selectedKmaStation || ''}
+                onChange={(e) => setSelectedKmaStation(e.target.value ? Number(e.target.value) : null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 disabled:bg-gray-100"
+                disabled={kmaStationsLoading}
+              >
+                <option value="">{kmaStationsLoading ? '로딩 중...' : '관측소 선택'}</option>
+                {kmaStations.map(station => (
+                  <option key={station.stn_id} value={station.stn_id}>{station.stn_nm}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -732,6 +877,18 @@ const PastWeather = () => {
             <p className="mt-2 text-sm text-red-500">{error}</p>
           )}
         </div>
+        </div>
+
+        {/* Map Section */}
+        <PastWeatherMap
+          rdaStations={rdaStations}
+          kmaStations={kmaStations}
+          selectedYear={mapYear}
+          onYearChange={setMapYear}
+          onLocationSelect={handleMapLocationSelect}
+          selectedRdaStation={selectedRdaStation}
+          selectedKmaStation={selectedKmaStation}
+        />
       </div>
 
       {/* Results Section */}
