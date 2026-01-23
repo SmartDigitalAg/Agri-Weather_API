@@ -239,7 +239,7 @@ const WeatherForecast = () => {
 
         try {
           const response = await fetch(
-            `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(location.regionName)}&limit=100`
+            `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(location.regionName)}&limit=500`
           );
           if (response.ok) {
             const forecasts: ShortForecastData[] = await response.json();
@@ -296,7 +296,7 @@ const WeatherForecast = () => {
       setShortForecastLoading(true);
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(selectedShortRegion)}&limit=100`
+          `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(selectedShortRegion)}&limit=500`
         );
         if (response.ok) {
           const data: ShortForecastData[] = await response.json();
@@ -673,12 +673,12 @@ const WeatherForecast = () => {
                         )}
                       </div>
 
-                      {/* 기온 */}
-                      {(am?.temp_min !== null || am?.temp_max !== null) && (
+                      {/* 기온 (최저: AM, 최고: PM) */}
+                      {(am?.temp_min !== null || pm?.temp_max !== null) && (
                         <div className="mt-2 pt-2 border-t border-gray-200 text-xs">
                           <span className="text-blue-600">{am?.temp_min ?? '-'}°</span>
                           <span className="text-gray-400">/</span>
-                          <span className="text-red-600">{am?.temp_max ?? '-'}°</span>
+                          <span className="text-red-600">{pm?.temp_max ?? '-'}°</span>
                         </div>
                       )}
                     </div>

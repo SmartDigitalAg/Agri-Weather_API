@@ -27,7 +27,7 @@ router = APIRouter(
 def get_latest_short_forecast(
     region_name: Optional[str] = Query(default=None, description="지역명"),
     category: Optional[str] = Query(default=None, description="자료구분 (TMP, POP, SKY 등)"),
-    limit: int = Query(default=50, ge=1, le=100, description="조회 개수"),
+    limit: int = Query(default=300, ge=1, le=1000, description="조회 개수"),
     db: Session = Depends(get_db)
 ):
     """
