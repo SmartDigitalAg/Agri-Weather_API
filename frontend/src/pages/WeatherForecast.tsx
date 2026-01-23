@@ -67,12 +67,6 @@ interface ForecastLocation {
   regionName: string; // API 조회용 지역명
 }
 
-// 단기예보 지역 인터페이스
-interface ShortForecastRegion {
-  region_name: string;
-  data_count: number;
-}
-
 // 예보 위치 데이터 (6개 지역)
 const forecastLocations: ForecastLocation[] = [
   { id: 'gwanak', name: '관악구', lat: 37.4674, lng: 126.9453, regionName: '관악구' },
@@ -153,11 +147,11 @@ const getWeatherIconFromCondition = (condition: string | null): { icon: string; 
 };
 
 const WeatherForecast = () => {
-  // 단기예보 상태
-  const [shortForecastRegions, setShortForecastRegions] = useState<ShortForecastRegion[]>([]);
+  // 단기예보 상태 - 전체 데이터를 한 번에 로드
+  const [allShortForecastData, setAllShortForecastData] = useState<ShortForecastData[]>([]);
+  const [shortForecastRegions, setShortForecastRegions] = useState<string[]>([]);
   const [selectedShortRegion, setSelectedShortRegion] = useState<string>('');
-  const [shortForecastData, setShortForecastData] = useState<ShortForecastData[]>([]);
-  const [shortForecastLoading, setShortForecastLoading] = useState<boolean>(false);
+  const [shortForecastLoading, setShortForecastLoading] = useState<boolean>(true);
 
   // 중기예보 상태
   const [midForecastRegions, setMidForecastRegions] = useState<MidForecastRegion[]>([]);
@@ -168,9 +162,6 @@ const WeatherForecast = () => {
   // 지도용 예보 데이터 (내일 기준)
   const [mapForecastData, setMapForecastData] = useState<Map<string, { sky: number | null; pty: number | null }>>(new Map());
   const [mapLoading, setMapLoading] = useState<boolean>(true);
-
-  // 사용 가능한 지역 목록 (지도용)
-  const [availableRegions, setAvailableRegions] = useState<Set<string>>(new Set());
 
   // SVG dimensions
   const width = 500;
@@ -208,11 +199,11 @@ const WeatherForecast = () => {
       try {
         const response = await fetch(`${API_BASE_URL}/api/kma/forecast/short/regions`);
         if (response.ok) {
-          const data: ShortForecastRegion[] = await response.json();
-          setShortForecastRegions(data);
-          setAvailableRegions(new Set(data.map(r => r.region_name)));
-          if (data.length > 0) {
-            setSelectedShortRegion(data[0].region_name);
+          const data: { region_name: string; data_count: number }[] = await response.json();
+          const regions = data.map(d => d.region_name).sort();
+          setShortForecastRegions(regions);
+          if (regions.length > 0) {
+            setSelectedShortRegion(regions[0]);
           }
         }
       } catch (err) {
@@ -224,22 +215,15 @@ const WeatherForecast = () => {
 
   // 지도용 예보 데이터 로드 (6개 지역의 내일 예보)
   useEffect(() => {
-    if (availableRegions.size === 0) return;
-
     const fetchMapForecastData = async () => {
       setMapLoading(true);
       const forecastMap = new Map<string, { sky: number | null; pty: number | null }>();
 
-      for (const location of forecastLocations) {
-        // 해당 지역이 데이터베이스에 있는지 확인
-        if (!availableRegions.has(location.regionName)) {
-          console.log(`${location.name} 지역 데이터 없음`);
-          continue;
-        }
-
+      // 6개 지역 데이터를 병렬로 가져오기
+      const promises = forecastLocations.map(async (location) => {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(location.regionName)}&limit=500`
+            `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(location.regionName)}&limit=100`
           );
           if (response.ok) {
             const forecasts: ShortForecastData[] = await response.json();
@@ -252,22 +236,32 @@ const WeatherForecast = () => {
             const skyData = tomorrowForecast.find(f => f.category === 'SKY');
             const ptyData = tomorrowForecast.find(f => f.category === 'PTY');
 
-            forecastMap.set(location.id, {
+            return {
+              id: location.id,
               sky: skyData ? parseInt(skyData.fcst_value) : null,
-              pty: ptyData ? parseInt(ptyData.fcst_value) : null
-            });
+              pty: ptyData ? parseInt(ptyData.fcst_value) : null,
+              hasData: forecasts.length > 0
+            };
           }
         } catch (err) {
           console.error(`${location.name} 예보 로드 실패:`, err);
         }
-      }
+        return { id: location.id, sky: null, pty: null, hasData: false };
+      });
+
+      const results = await Promise.all(promises);
+      results.forEach(result => {
+        if (result) {
+          forecastMap.set(result.id, { sky: result.sky, pty: result.pty });
+        }
+      });
 
       setMapForecastData(forecastMap);
       setMapLoading(false);
     };
 
     fetchMapForecastData();
-  }, [tomorrowStr, availableRegions]);
+  }, [tomorrowStr]);
 
   // 중기예보 지역 목록 로드
   useEffect(() => {
@@ -288,7 +282,7 @@ const WeatherForecast = () => {
     fetchMidRegions();
   }, []);
 
-  // 단기예보 데이터 로드
+  // 선택된 지역의 단기예보 데이터 로드
   useEffect(() => {
     if (!selectedShortRegion) return;
 
@@ -296,11 +290,11 @@ const WeatherForecast = () => {
       setShortForecastLoading(true);
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(selectedShortRegion)}&limit=500`
+          `${API_BASE_URL}/api/kma/forecast/short/latest?region_name=${encodeURIComponent(selectedShortRegion)}&limit=1000`
         );
         if (response.ok) {
           const data: ShortForecastData[] = await response.json();
-          setShortForecastData(data);
+          setAllShortForecastData(data);
         }
       } catch (err) {
         console.error('단기예보 로드 실패:', err);
@@ -311,6 +305,9 @@ const WeatherForecast = () => {
 
     fetchShortForecast();
   }, [selectedShortRegion]);
+
+  // 선택된 지역의 단기예보 데이터
+  const shortForecastData = allShortForecastData;
 
   // 중기예보 데이터 로드
   useEffect(() => {
@@ -481,7 +478,7 @@ const WeatherForecast = () => {
               {forecastLocations.map((location) => {
                 const { x, y } = latLngToXY(location.lat, location.lng);
                 const forecastInfo = mapForecastData.get(location.id);
-                const hasData = availableRegions.has(location.regionName);
+                const hasData = shortForecastRegions.includes(location.regionName);
 
                 let weather;
                 if (!hasData) {
@@ -554,7 +551,7 @@ const WeatherForecast = () => {
                   <option value="">지역 로딩 중...</option>
                 ) : (
                   shortForecastRegions.map(region => (
-                    <option key={region.region_name} value={region.region_name}>{region.region_name}</option>
+                    <option key={region} value={region}>{region}</option>
                   ))
                 )}
               </select>

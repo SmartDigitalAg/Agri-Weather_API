@@ -1,51 +1,46 @@
+import { useState, useEffect } from 'react';
+
 const Header = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatDateTime = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = date.getHours();
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const ampm = hours < 12 ? '오전' : '오후';
+    const displayHours = String(hours % 12 || 12).padStart(2, '0');
+
+    return `${year}.${month}.${day} ${ampm} ${displayHours}:${minutes}`;
+  };
+
   return (
-    <header className="bg-gradient-to-r from-green-700 to-green-600 text-white shadow-lg">
+    <header className="bg-gray-100">
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo and Title */}
-          <div className="flex items-center space-x-3">
-            <div className="flex-shrink-0">
-              <svg
-                className="h-10 w-10 text-green-200"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-                Smart Digital Agriculture Lab
-              </h1>
-            </div>
+          {/* Title */}
+          <div className="flex items-center">
+            <h1
+              className="text-xl sm:text-2xl font-bold tracking-tight text-gray-700"
+              style={{ textShadow: '1px 1px 2px rgba(0, 0, 0, 0.1)' }}
+            >
+              기상데이터 제공 및 API 서비스
+            </h1>
           </div>
 
-          {/* Right side buttons */}
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            {/* Current time display */}
-            <div className="hidden md:flex flex-col items-end text-sm">
-              <span className="text-green-200">
-                {new Date().toLocaleDateString('ko-KR', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </span>
-              <span className="text-green-100 font-medium">
-                {new Date().toLocaleTimeString('ko-KR', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </span>
-            </div>
-
+          {/* Right side - Date/Time */}
+          <div className="flex items-center">
+            <span className="text-gray-500 font-medium text-sm sm:text-base">
+              {formatDateTime(currentTime)}
+            </span>
           </div>
         </div>
       </div>

@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import CurrentWeather from './pages/CurrentWeather';
 import PastWeather from './pages/PastWeather';
 import WeatherForecast from './pages/WeatherForecast';
+import ApiDocs from './pages/ApiDocs';
 import type { DataCategory } from './types';
 
 function App() {
@@ -20,11 +21,7 @@ function App() {
       case 'forecast':
         return <WeatherForecast />;
       case 'api':
-        return (
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500">
-            API 설명 페이지 (준비중)
-          </div>
-        );
+        return <ApiDocs />;
       default:
         return <CurrentWeather />;
     }

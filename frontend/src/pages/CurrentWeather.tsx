@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo } from 'react';
 import MapVisualization from '../components/MapVisualization';
 import type { WeatherCardMarker } from '../components/MapVisualization';
+import {
+  ComposedChart,
+  Line,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 
 const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
 
@@ -100,6 +111,20 @@ interface KmaWeatherData {
   WSD: number | null;  // 풍속
 }
 
+// KMA 실시간 원본 데이터 타입
+interface KmaRealtimeData {
+  id: number;
+  stn_id: string;
+  region_name: string;
+  tm: string;
+  ta: number | null;
+  rn: number | null;
+  ws: number | null;
+  wd: number | null;
+  hm: number | null;
+  pa: number | null;
+}
+
 // RDA 관측소 타입
 interface RdaStation {
   province: string | null;
@@ -114,6 +139,94 @@ interface KmaRegion {
   nx: number;
   ny: number;
 }
+
+// 차트 데이터 타입
+interface ChartDataPoint {
+  time: string;
+  hour: number;
+  temperature: number | null;
+  humidity: number | null;
+}
+
+// ===== 오늘의 기온/습도 차트 컴포넌트 =====
+interface TodayChartProps {
+  data: ChartDataPoint[];
+  title: string;
+}
+
+const TodayWeatherChart: React.FC<TodayChartProps> = ({ data, title }) => {
+  if (data.length === 0) {
+    return (
+      <div className="bg-gray-50 rounded-lg p-4 h-48 flex items-center justify-center">
+        <p className="text-gray-400 text-sm">오늘의 데이터가 없습니다</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-gray-50 rounded-lg p-3">
+      <h4 className="text-xs font-medium text-gray-600 mb-2">{title}</h4>
+      <ResponsiveContainer width="100%" height={160}>
+        <ComposedChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+          <XAxis
+            dataKey="time"
+            tick={{ fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: '#e0e0e0' }}
+          />
+          <YAxis
+            yAxisId="temp"
+            orientation="left"
+            tick={{ fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: '#e0e0e0' }}
+            domain={['auto', 'auto']}
+            label={{ value: '°C', position: 'top', offset: -5, fontSize: 10 }}
+          />
+          <YAxis
+            yAxisId="hum"
+            orientation="right"
+            tick={{ fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: '#e0e0e0' }}
+            domain={[0, 100]}
+            label={{ value: '%', position: 'top', offset: -5, fontSize: 10 }}
+          />
+          <Tooltip
+            contentStyle={{ fontSize: 11, padding: '4px 8px' }}
+            formatter={(value, name) => [
+              typeof value === 'number' ? value.toFixed(1) : '-',
+              name === 'temperature' ? '기온(°C)' : '습도(%)'
+            ]}
+            labelFormatter={(label) => `${label}시`}
+          />
+          <Legend
+            wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
+            formatter={(value) => String(value) === 'temperature' ? '기온' : '습도'}
+          />
+          <Bar
+            yAxisId="hum"
+            dataKey="humidity"
+            fill="#93c5fd"
+            opacity={0.6}
+            radius={[2, 2, 0, 0]}
+            name="humidity"
+          />
+          <Line
+            yAxisId="temp"
+            type="monotone"
+            dataKey="temperature"
+            stroke="#f97316"
+            strokeWidth={2}
+            dot={{ r: 3, fill: '#f97316' }}
+            name="temperature"
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
 // ===== RDA 기상 섹션 컴포넌트 =====
 const RdaWeatherSection: React.FC = () => {
@@ -427,6 +540,7 @@ const KmaWeatherSection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [initialDataMap, setInitialDataMap] = useState<Map<string, KmaWeatherData>>(new Map());
   const [sidoRepRegions, setSidoRepRegions] = useState<Map<string, KmaWeatherData>>(new Map());
+  const [todayChartData, setTodayChartData] = useState<ChartDataPoint[]>([]);
 
   // 실시간 데이터에서 지역 목록 추출 및 시도 목록 생성
   useEffect(() => {
@@ -503,6 +617,58 @@ const KmaWeatherSection: React.FC = () => {
     };
     fetchRealtimeData();
   }, []);
+
+  // 선택된 지역의 오늘 데이터 가져오기
+  useEffect(() => {
+    if (!selectedRegion) return;
+
+    const fetchTodayData = async () => {
+      try {
+        // 오늘 날짜 계산
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+        const currentHour = today.getHours();
+
+        // KMA 실시간 데이터에서 해당 지역의 오늘 데이터 가져오기
+        const response = await fetch(
+          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedRegion)}/range?start_date=${todayStr}&end_date=${todayStr}&limit=100`
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          const data: KmaRealtimeData[] = result.data || result;
+
+          // 시간별로 그룹화 (같은 시간대의 마지막 데이터 사용)
+          const hourlyMap = new Map<number, KmaRealtimeData>();
+          data.forEach(item => {
+            const hour = new Date(item.tm).getHours();
+            if (hour <= currentHour) {
+              hourlyMap.set(hour, item);
+            }
+          });
+
+          // 차트 데이터 생성 (0시부터 현재시간까지)
+          const chartData: ChartDataPoint[] = [];
+          for (let h = 0; h <= currentHour; h++) {
+            const hourData = hourlyMap.get(h);
+            chartData.push({
+              time: String(h).padStart(2, '0'),
+              hour: h,
+              temperature: hourData?.ta ?? null,
+              humidity: hourData?.hm ?? null,
+            });
+          }
+
+          setTodayChartData(chartData);
+        }
+      } catch (err) {
+        console.error('KMA 오늘 데이터 조회 실패:', err);
+        setTodayChartData([]);
+      }
+    };
+
+    fetchTodayData();
+  }, [selectedRegion]);
 
   // 지도에 표시할 카드 마커 생성
   const weatherCards: WeatherCardMarker[] = useMemo(() => {
@@ -700,6 +866,14 @@ const KmaWeatherSection: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* 오늘의 기온/습도 차트 */}
+          <div className="mt-4">
+            <TodayWeatherChart
+              data={todayChartData}
+              title="오늘의 기온/습도 (0시~현재)"
+            />
+          </div>
         </div>
 
         {/* Right: Map */}
