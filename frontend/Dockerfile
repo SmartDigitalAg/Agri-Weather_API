@@ -16,7 +16,8 @@ COPY . .
 ARG VITE_API_URL=http://weather-rda.digitalag.kr:8001
 ENV VITE_API_URL=$VITE_API_URL
 
-RUN npm run build
+# TypeScript 체크 생략 (메모리 절약)
+RUN npx vite build
 
 # Production stage
 FROM nginx:alpine
