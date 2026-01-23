@@ -24,7 +24,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=http://localhost:8001
+        - VITE_API_URL=http://weather-rda.digitalag.kr:8001
     container_name: agri-weather-frontend
     ports:
       - "80:80"

@@ -13,7 +13,7 @@ RUN npm ci
 COPY . .
 
 # 환경변수 설정 (빌드 시 API URL 설정)
-ARG VITE_API_URL=http://localhost:8000
+ARG VITE_API_URL=http://weather-rda.digitalag.kr:8001
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build
