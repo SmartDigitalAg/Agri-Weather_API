@@ -87,6 +87,29 @@ def get_short_forecast_by_region(
     return PaginatedResponse(total=total, offset=offset, limit=limit, data=results)
 
 
+# ===== 단기예보 지역 목록 =====
+
+@router.get("/short/regions", response_model=List[dict], summary="단기예보 지역 목록 조회")
+def get_short_forecast_regions(db: Session = Depends(get_db)):
+    """
+    단기예보 데이터가 있는 지역 목록을 조회합니다.
+    """
+    results = db.query(
+        WeatherShortForecast.region_name,
+        func.count(WeatherShortForecast.id).label("data_count")
+    ).group_by(
+        WeatherShortForecast.region_name
+    ).order_by(WeatherShortForecast.region_name).all()
+
+    return [
+        {
+            "region_name": r.region_name,
+            "data_count": r.data_count
+        }
+        for r in results
+    ]
+
+
 # ===== 중기예보 =====
 
 @router.get("/mid/latest", response_model=List[WeatherMidForecastResponse], summary="최신 중기예보 조회")

@@ -3,6 +3,7 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import CurrentWeather from './pages/CurrentWeather';
 import PastWeather from './pages/PastWeather';
+import WeatherForecast from './pages/WeatherForecast';
 import type { DataCategory } from './types';
 
 function App() {
@@ -17,11 +18,7 @@ function App() {
       case 'past':
         return <PastWeather />;
       case 'forecast':
-        return (
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500">
-            기상예보 페이지 (준비중)
-          </div>
-        );
+        return <WeatherForecast />;
       case 'api':
         return (
           <div className="bg-white rounded-xl shadow-lg p-8 text-center text-gray-500">
