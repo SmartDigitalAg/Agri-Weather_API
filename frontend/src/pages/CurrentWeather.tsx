@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
+const API_BASE_URL = 'http://3.35.171.253:8001';
 
 // RDA 지도에 표시할 6개 도 목록
 const RDA_TARGET_PROVINCES = ['경기도', '경상북도', '충청남도', '충청북도', '강원특별자치도', '전북특별자치도'];

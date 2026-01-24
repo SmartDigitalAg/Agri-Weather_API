@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import PastWeatherMap from '../components/PastWeatherMap';
 
-const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
+const API_BASE_URL = 'http://3.35.171.253:8001';
 
 // 기관 타입
 type Institution = 'RDA' | 'KMA';
