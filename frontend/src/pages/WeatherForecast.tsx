@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as d3 from 'd3-geo';
 import geoData from '../components/MapVisualization/SIDO_MAP_2022.json';
 
-const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
+const API_BASE_URL = 'http://3.35.171.253:8001';
 
 // GeoJSON 타입 정의
 interface GeoFeature {
