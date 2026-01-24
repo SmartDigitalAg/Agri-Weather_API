@@ -2,6 +2,23 @@
 version: '3.8'
 
 services:
+  # PostgreSQL 데이터베이스
+  db:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      - POSTGRES_DB=ag_weather_db
+      - POSTGRES_USER=smartfarm
+      - POSTGRES_PASSWORD=smartfarm
+      - TZ=Asia/Seoul
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - app-network
+
   # 백엔드 (FastAPI)
   backend:
     build:
@@ -14,6 +31,9 @@ services:
       - ./backend/.env
     environment:
       - TZ=Asia/Seoul
+      - DB_HOST=db
+    depends_on:
+      - db
     restart: unless-stopped
     networks:
       - app-network
@@ -37,3 +57,6 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  postgres_data:
