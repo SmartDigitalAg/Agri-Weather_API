@@ -16,7 +16,8 @@ COPY . .
 ARG VITE_API_URL=http://weather-rda.digitalag.kr:8001
 ENV VITE_API_URL=$VITE_API_URL
 
-# TypeScript 체크 생략 (메모리 절약)
+# 빌드 최적화 (메모리 확보 + SWC 사용)
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npx vite build
 
 # Production stage
