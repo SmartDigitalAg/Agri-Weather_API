@@ -5,7 +5,7 @@ KMA 초단기 실황 API 라우터
 """
 
 from typing import Optional, List
-from datetime import date
+from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -99,6 +99,64 @@ def get_latest_realtime_pivot(
         results.append(WeatherRealtimePivotResponse(**pivot_data))
 
     return results
+
+
+@router.get("/today/{region_name}", summary="지역별 오늘 데이터 조회 (그래프용)")
+def get_today_weather(
+    region_name: str,
+    db: Session = Depends(get_db)
+):
+    """
+    특정 지역의 오늘 날짜 초단기 실황 데이터를 조회합니다.
+    - 매일 자정에 리셋되어 새로 시작
+    - 시간순 오름차순 정렬 (그래프용)
+    - T1H(기온), REH(습도) 값 반환
+    """
+    today = datetime.now().date()
+
+    # 해당 지역의 오늘 데이터에서 고유 시간대 조회 (시간 오름차순)
+    subquery = db.query(
+        WeatherRealtime.base_date,
+        WeatherRealtime.base_time
+    ).filter(
+        WeatherRealtime.region_name == region_name,
+        WeatherRealtime.base_date == today
+    ).distinct().order_by(
+        WeatherRealtime.base_time.asc()
+    )
+
+    time_slots = subquery.all()
+
+    if not time_slots:
+        return {"data": []}
+
+    results = []
+    for ts in time_slots:
+        # 해당 시각의 모든 카테고리 조회
+        records = db.query(WeatherRealtime).filter(
+            WeatherRealtime.region_name == region_name,
+            WeatherRealtime.base_date == ts.base_date,
+            WeatherRealtime.base_time == ts.base_time
+        ).all()
+
+        # 피벗 변환
+        pivot_data = {
+            "region_name": region_name,
+            "base_date": ts.base_date.isoformat() if ts.base_date else None,
+            "base_time": ts.base_time,
+            "T1H": None,
+            "REH": None
+        }
+
+        for r in records:
+            if r.category == "T1H":
+                pivot_data["T1H"] = r.obsrvalue
+            elif r.category == "REH":
+                pivot_data["REH"] = r.obsrvalue
+
+        results.append(pivot_data)
+
+    return {"data": results}
 
 
 @router.get("/region/{region_name}/range", summary="지역별 기간 조회 (피벗)")

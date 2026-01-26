@@ -111,18 +111,13 @@ interface KmaWeatherData {
   WSD: number | null;  // 풍속
 }
 
-// KMA 실시간 원본 데이터 타입
-interface KmaRealtimeData {
-  id: number;
-  stn_id: string;
+// KMA 오늘 데이터 타입 (그래프용)
+interface KmaTodayData {
   region_name: string;
-  tm: string;
-  ta: number | null;
-  rn: number | null;
-  ws: number | null;
-  wd: number | null;
-  hm: number | null;
-  pa: number | null;
+  base_date: string;
+  base_time: string;
+  T1H: number | null;
+  REH: number | null;
 }
 
 // RDA 관측소 타입
@@ -624,40 +619,26 @@ const KmaWeatherSection: React.FC = () => {
 
     const fetchTodayData = async () => {
       try {
-        // 오늘 날짜 계산
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        const currentHour = today.getHours();
-
-        // KMA 실시간 데이터에서 해당 지역의 오늘 데이터 가져오기
+        // KMA 오늘 데이터 가져오기 (백엔드에서 오늘 날짜 자동 필터링)
         const response = await fetch(
-          `${API_BASE_URL}/api/kma/realtime/region/${encodeURIComponent(selectedRegion)}/range?start_date=${todayStr}&end_date=${todayStr}&limit=100`
+          `${API_BASE_URL}/api/kma/realtime/today/${encodeURIComponent(selectedRegion)}`
         );
 
         if (response.ok) {
           const result = await response.json();
-          const data: KmaRealtimeData[] = result.data || result;
+          const data: KmaTodayData[] = result.data || [];
 
-          // 시간별로 그룹화 (같은 시간대의 마지막 데이터 사용)
-          const hourlyMap = new Map<number, KmaRealtimeData>();
-          data.forEach(item => {
-            const hour = new Date(item.tm).getHours();
-            if (hour <= currentHour) {
-              hourlyMap.set(hour, item);
-            }
+          // 차트 데이터 생성 (base_time에서 시간 추출, 시간순 정렬됨)
+          const chartData: ChartDataPoint[] = data.map(item => {
+            // base_time은 "HHmm" 형식 (예: "0600", "1200")
+            const hour = parseInt(item.base_time.slice(0, 2), 10);
+            return {
+              time: String(hour).padStart(2, '0'),
+              hour: hour,
+              temperature: item.T1H,
+              humidity: item.REH,
+            };
           });
-
-          // 차트 데이터 생성 (0시부터 현재시간까지)
-          const chartData: ChartDataPoint[] = [];
-          for (let h = 0; h <= currentHour; h++) {
-            const hourData = hourlyMap.get(h);
-            chartData.push({
-              time: String(h).padStart(2, '0'),
-              hour: h,
-              temperature: hourData?.ta ?? null,
-              humidity: hourData?.hm ?? null,
-            });
-          }
 
           setTodayChartData(chartData);
         }
