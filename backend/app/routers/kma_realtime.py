@@ -8,7 +8,7 @@ from typing import Optional, List
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, String
 
 from ..database import get_db
 from ..models.kma import WeatherRealtime
@@ -112,7 +112,8 @@ def get_today_weather(
     - 시간순 오름차순 정렬 (그래프용)
     - T1H(기온), REH(습도) 값 반환
     """
-    today = datetime.now().date()
+    # 오늘 날짜 (YYYY-MM-DD 형식 문자열)
+    today_str = datetime.now().strftime("%Y-%m-%d")
 
     # 해당 지역의 오늘 데이터에서 고유 시간대 조회 (시간 오름차순)
     subquery = db.query(
@@ -120,7 +121,7 @@ def get_today_weather(
         WeatherRealtime.base_time
     ).filter(
         WeatherRealtime.region_name == region_name,
-        WeatherRealtime.base_date == today
+        func.cast(WeatherRealtime.base_date, String) == today_str
     ).distinct().order_by(
         WeatherRealtime.base_time.asc()
     )
