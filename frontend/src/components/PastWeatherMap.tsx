@@ -252,17 +252,32 @@ const PastWeatherMap: React.FC<PastWeatherMapProps> = ({
     );
   }, [mapLocations, selectedYear]);
 
-  // 위치 색상 결정
+  // 위치 색상 결정 (선택된 연도 기준)
   const getLocationColor = (location: MapLocation): string => {
-    const hasRDA = location.institutions.includes('RDA');
-    const hasKMA = location.institutions.includes('KMA');
+    // 선택된 연도에 RDA 데이터가 있는지 확인
+    const rdaFirstYear = location.rdaStation
+      ? parseInt(location.rdaStation.first_date?.substring(0, 4) || '9999')
+      : 9999;
+    const rdaLastYear = location.rdaStation
+      ? parseInt(location.rdaStation.last_date?.substring(0, 4) || '0')
+      : 0;
+    const hasRDAInYear = rdaFirstYear <= selectedYear && rdaLastYear >= selectedYear;
 
-    if (hasRDA && hasKMA) {
-      return '#d4a574'; // 베이지색 - 겹침
-    } else if (hasRDA) {
-      return '#87CEEB'; // 하늘색 - RDA
+    // 선택된 연도에 KMA 데이터가 있는지 확인
+    const kmaFirstYear = location.kmaStation
+      ? parseInt(location.kmaStation.first_date?.substring(0, 4) || '9999')
+      : 9999;
+    const kmaLastYear = location.kmaStation
+      ? parseInt(location.kmaStation.last_date?.substring(0, 4) || '0')
+      : 0;
+    const hasKMAInYear = kmaFirstYear <= selectedYear && kmaLastYear >= selectedYear;
+
+    if (hasRDAInYear && hasKMAInYear) {
+      return '#d4a574'; // 베이지색 - 둘 다 있음
+    } else if (hasRDAInYear) {
+      return '#87CEEB'; // 하늘색 - RDA만
     } else {
-      return '#FFA500'; // 주황색 - KMA
+      return '#FFA500'; // 주황색 - KMA만
     }
   };
 
@@ -318,7 +333,7 @@ const PastWeatherMap: React.FC<PastWeatherMapProps> = ({
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: '#d4a574' }}></div>
-          <span className="text-gray-600">겹침</span>
+          <span className="text-gray-600">RDA,KMA</span>
         </div>
       </div>
 
