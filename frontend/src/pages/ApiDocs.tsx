@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = 'http://weather-rda.digitalag.kr:8001';
 
 const Container = styled.div`
   padding: 24px;
@@ -191,6 +191,8 @@ const ApiDocs: React.FC = () => {
       <Title>API 문서</Title>
       <InfoBox>
         <strong>Base URL:</strong> <code>{API_BASE_URL}</code>
+        <br />
+        <strong>테스트페이지:</strong> <a href={`${API_BASE_URL}/docs`} target="_blank" rel="noopener noreferrer" style={{color: '#1a73e8'}}>{API_BASE_URL}/docs</a>
       </InfoBox>
 
       <TabContainer>
