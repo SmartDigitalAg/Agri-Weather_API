@@ -1,0 +1,97 @@
+services:
+  # ==========================================
+  # Database Service (PostgreSQL)
+  # ==========================================
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - .env
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==========================================
+  # Scheduler Service (Python 3.9)
+  # ==========================================
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: scheduler
+    container_name: agri-weather-scheduler
+    # 개발 편의를 위해 소스 코드를 바인드 마운트
+    volumes:
+      - ./DB:/app/DB
+      - .env:/app/.env
+    # 작업 디렉토리를 /app/DB로 설정하여 scheduler.py 실행 용이하게 함
+    working_dir: /app/DB
+    command: python scheduler.py
+    environment:
+      - TZ=Asia/Seoul
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==========================================
+  # Backend Service (FastAPI)
+  # ==========================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    container_name: agri-weather-backend
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./API/backend/app:/app/app
+      - .env:/app/.env
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Seoul
+      - DB_HOST=postgres
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ==========================================
+  # Frontend Service (Nginx)
+  # ==========================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+      args:
+        - VITE_API_URL=http://3.35.171.253:8001
+    container_name: agri-weather-frontend
+    ports:
+      - "8005:8005"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
