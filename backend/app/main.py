@@ -14,9 +14,12 @@ from .config import get_settings
 from .database import engine, Base
 from .routers import (
     kma_asos_router,
+    kma_day_router,
     kma_realtime_router,
     kma_forecast_router,
     rda_weather_router,
+    rda_day_router,
+    download_router,
     stats_router
 )
 
@@ -110,9 +113,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # 라우터 등록
 app.include_router(kma_asos_router)
+app.include_router(kma_day_router)
 app.include_router(kma_realtime_router)
 app.include_router(kma_forecast_router)
 app.include_router(rda_weather_router)
+app.include_router(rda_day_router)
+app.include_router(download_router)
 app.include_router(stats_router)
 
 

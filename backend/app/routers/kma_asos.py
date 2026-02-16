@@ -4,8 +4,10 @@ KMA ASOS 일자료 API 라우터
 - 기상청 ASOS 관측소 일자료 조회 엔드포인트
 """
 
+import csv
+import os
 from typing import Optional, List
-from datetime import date
+from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -181,3 +183,126 @@ def get_asos_stations(db: Session = Depends(get_db)):
         }
         for r in results
     ]
+
+
+# ============================================================
+# KMA 과거기상 (일자료) 공개 API
+# ============================================================
+
+day_router = APIRouter(
+    prefix="/api/kma/day",
+    tags=["KMA 과거기상 (일자료)"]
+)
+
+# --- 지역 정보 CSV 로드 ---
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_KMA_CSV_PATH = os.path.join(_BASE_DIR, "..", "..", "..", "Agri-Weather_DB", "KMA", "kma_region.csv")
+
+KMA_STATION_MAP: dict = {}
+KMA_STATION_LIST: list = []
+
+
+def _load_kma_stations():
+    resolved = os.path.normpath(_KMA_CSV_PATH)
+    if not os.path.exists(resolved):
+        print(f"[WARN] kma_region.csv not found: {resolved}")
+        return
+    with open(resolved, encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            stn_id = row.get("지점번호", "").strip()
+            if not stn_id:
+                continue
+            entry = {
+                "stn_id": int(stn_id),
+                "stn_nm": row.get("지점명", "").strip(),
+                "admin_office": row.get("관리관서", "").strip(),
+                "obs_start_date": row.get("관측시작일", "").strip(),
+            }
+            KMA_STATION_MAP[stn_id] = entry
+            KMA_STATION_LIST.append(entry)
+
+
+_load_kma_stations()
+
+
+@day_router.get("/region", summary="조회 가능한 KMA 관측소 목록")
+def get_kma_day_regions(db: Session = Depends(get_db)):
+    """
+    과거기상 데이터를 조회할 수 있는 KMA ASOS 관측소 목록을 반환합니다.
+    DB에 저장된 관측 시작일자와 마지막 관측일자를 포함합니다.
+    """
+    results = db.query(
+        AsosDailyData.stn_id,
+        AsosDailyData.stn_nm,
+        func.min(AsosDailyData.tm).label("first_date"),
+        func.max(AsosDailyData.tm).label("last_date")
+    ).group_by(
+        AsosDailyData.stn_id,
+        AsosDailyData.stn_nm
+    ).order_by(AsosDailyData.stn_id).all()
+
+    return [
+        {
+            "stn_id": r.stn_id,
+            "stn_nm": r.stn_nm,
+            "first_date": r.first_date.isoformat() if r.first_date else None,
+            "last_date": r.last_date.isoformat() if r.last_date else None,
+        }
+        for r in results
+    ]
+
+
+@day_router.get("/{stn_id}/{start_date}/{end_date}", summary="지역별 특정기간 과거기상 조회")
+def get_kma_day_data(
+    stn_id: int,
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db)
+):
+    """
+    특정 관측소의 기간별 과거기상 일자료를 조회합니다.
+
+    - **stn_id**: 지점번호 (예: 108)
+    - **start_date**: 시작 날짜 (YYYY-MM-DD)
+    - **end_date**: 종료 날짜 (YYYY-MM-DD)
+    - 가장 최근 종료일자는 **현재일자보다 2일 전**까지 가능합니다.
+    - 데이터 업데이트 주기: 매일 1회 (전일 데이터 기준, 2일 지연)
+    """
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="시작 날짜가 종료 날짜보다 늦을 수 없습니다.")
+
+    max_date = date.today() - timedelta(days=2)
+    if end_date > max_date:
+        raise HTTPException(
+            status_code=400,
+            detail=f"종료 날짜는 {max_date.isoformat()} 이전이어야 합니다. (현재일자 - 2일)"
+        )
+
+    results = db.query(AsosDailyData).filter(
+        AsosDailyData.stn_id == stn_id,
+        AsosDailyData.tm >= start_date,
+        AsosDailyData.tm <= end_date
+    ).order_by(AsosDailyData.tm).all()
+
+    if not results:
+        raise HTTPException(status_code=404, detail=f"지점 '{stn_id}'의 해당 기간 데이터가 없습니다.")
+
+    data = [
+        {
+            "stn_id": r.stn_id,
+            "stn_nm": r.stn_nm,
+            "tm": r.tm.isoformat() if r.tm else None,
+            "avg_ta": r.avg_ta,
+            "min_ta": r.min_ta,
+            "max_ta": r.max_ta,
+            "sum_rn": r.sum_rn,
+            "avg_ws": r.avg_ws,
+            "avg_rhm": r.avg_rhm,
+            "sum_ss_hr": r.sum_ss_hr,
+            "sum_gsr": r.sum_gsr,
+        }
+        for r in results
+    ]
+
+    return {"total": len(data), "data": data}

@@ -4,8 +4,10 @@ RDA 농업기상 API 라우터
 - 농촌진흥청 기상 데이터 조회 엔드포인트
 """
 
+import csv
+import os
 from typing import Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -23,6 +25,36 @@ router = APIRouter(
     prefix="/api/rda/weather",
     tags=["RDA 농업기상"]
 )
+
+# --- 지점 정보 매핑 로드 ---
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CSV_PATH = os.path.join(_BASE_DIR, "..", "..", "..", "Agri-Weather_DB", "RDA", "region_info.csv")
+
+STATION_MAP: dict = {}   # {지점코드: {"stn_name", "province"}}
+STATION_LIST: list = []   # 전체 지점 목록
+
+
+def _load_station_map():
+    resolved = os.path.normpath(_CSV_PATH)
+    if not os.path.exists(resolved):
+        print(f"[WARN] region_info.csv not found: {resolved}")
+        return
+    with open(resolved, encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            code = row.get("지점코드", "").strip()
+            if not code:
+                continue
+            entry = {
+                "stn_cd": code,
+                "stn_name": row.get("지점명", "").strip(),
+                "province": row.get("도명", "").strip(),
+            }
+            STATION_MAP[code] = entry
+            STATION_LIST.append(entry)
+
+
+_load_station_map()
 
 
 # ===== 10분 간격 데이터 =====
@@ -321,3 +353,151 @@ def get_rda_realtime_provinces(db: Session = Depends(get_db)):
     ).distinct().order_by(WeatherData.province).all()
 
     return [r.province for r in results if r.province]
+
+
+# ===== 지점코드 기반 조회 =====
+
+@router.get("/realtime/code/stations", summary="지점코드 목록 조회 (CSV 기반)")
+def get_station_code_list():
+    """
+    조회 가능한 RDA 관측소 지점코드 목록을 반환합니다.
+    - stn_cd: 지점코드 (예: 477802A001)
+    - stn_name: 지점명 (예: 가평군 가평읍)
+    - province: 도명 (예: 경기도)
+    """
+    return STATION_LIST
+
+
+@router.get("/realtime/code/{stn_cd}", summary="지점코드로 최신 날씨 조회")
+def get_realtime_by_station_code(
+    stn_cd: str,
+    db: Session = Depends(get_db)
+):
+    """
+    지점코드로 특정 관측소의 최신 10분 간격 기상 데이터를 반환합니다.
+    - stn_cd: 관측소 지점코드 (예: 477802A001)
+    """
+    station_info = STATION_MAP.get(stn_cd)
+    if not station_info:
+        raise HTTPException(status_code=404, detail=f"지점코드 '{stn_cd}'에 해당하는 관측소가 없습니다.")
+
+    record = db.query(WeatherData).filter(
+        WeatherData.stn_cd == stn_cd
+    ).order_by(
+        desc(WeatherData.datetime)
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=404, detail=f"관측소 '{stn_cd}'의 데이터가 없습니다.")
+
+    return {
+        "stn_cd": record.stn_cd,
+        "stn_name": record.stn_name,
+        "province": record.province,
+        "datetime": record.datetime.isoformat() if record.datetime else None,
+        "temp": record.temp,
+        "hghst_artmp": record.hghst_artmp,
+        "lowst_artmp": record.lowst_artmp,
+        "hum": record.hum,
+        "widdir": record.widdir,
+        "wind": record.wind,
+        "max_wind": record.max_wind,
+        "rn": record.rn,
+        "sun_time": record.sun_time,
+        "srqty": record.srqty,
+        "condens_time": record.condens_time,
+        "gr_temp": record.gr_temp,
+        "soil_temp": record.soil_temp,
+        "soil_wt": record.soil_wt,
+    }
+
+
+# ============================================================
+# RDA 과거기상 (일자료) 공개 API
+# ============================================================
+
+day_router = APIRouter(
+    prefix="/api/rda/day",
+    tags=["RDA 과거기상 (일자료)"]
+)
+
+
+@day_router.get("/region", summary="조회 가능한 RDA 관측소 목록")
+def get_rda_day_regions(db: Session = Depends(get_db)):
+    """
+    과거기상 데이터를 조회할 수 있는 RDA 관측소 목록을 반환합니다.
+    DB에 저장된 관측 시작일자와 마지막 관측일자를 포함합니다.
+    """
+    results = db.query(
+        WeatherDataDaily.stn_cd,
+        WeatherDataDaily.stn_name,
+        func.min(WeatherDataDaily.date).label("first_date"),
+        func.max(WeatherDataDaily.date).label("last_date")
+    ).group_by(
+        WeatherDataDaily.stn_cd,
+        WeatherDataDaily.stn_name
+    ).order_by(WeatherDataDaily.stn_cd).all()
+
+    return [
+        {
+            "stn_cd": r.stn_cd,
+            "stn_name": r.stn_name,
+            "first_date": r.first_date.isoformat() if r.first_date else None,
+            "last_date": r.last_date.isoformat() if r.last_date else None,
+        }
+        for r in results
+    ]
+
+
+@day_router.get("/{stn_cd}/{start_date}/{end_date}", summary="지역별 특정기간 과거기상 조회")
+def get_rda_day_data(
+    stn_cd: str,
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db)
+):
+    """
+    특정 관측소의 기간별 과거기상 일자료를 조회합니다.
+
+    - **stn_cd**: 지점코드 (예: 477802A001)
+    - **start_date**: 시작 날짜 (YYYY-MM-DD)
+    - **end_date**: 종료 날짜 (YYYY-MM-DD)
+    - 가장 최근 종료일자는 **현재일자보다 2일 전**까지 가능합니다.
+    - 데이터 업데이트 주기: 매일 1회 (전일 데이터 기준, 2일 지연)
+    """
+    if start_date > end_date:
+        raise HTTPException(status_code=400, detail="시작 날짜가 종료 날짜보다 늦을 수 없습니다.")
+
+    max_date = date.today() - timedelta(days=2)
+    if end_date > max_date:
+        raise HTTPException(
+            status_code=400,
+            detail=f"종료 날짜는 {max_date.isoformat()} 이전이어야 합니다. (현재일자 - 2일)"
+        )
+
+    results = db.query(WeatherDataDaily).filter(
+        WeatherDataDaily.stn_cd == stn_cd,
+        WeatherDataDaily.date >= start_date,
+        WeatherDataDaily.date <= end_date
+    ).order_by(WeatherDataDaily.date).all()
+
+    if not results:
+        raise HTTPException(status_code=404, detail=f"관측소 '{stn_cd}'의 해당 기간 데이터가 없습니다.")
+
+    data = [
+        {
+            "stn_cd": r.stn_cd,
+            "stn_name": r.stn_name,
+            "date": r.date.isoformat() if r.date else None,
+            "temp": r.temp,
+            "hghst_artmp": r.hghst_artmp,
+            "lowst_artmp": r.lowst_artmp,
+            "hum": r.hum,
+            "wind": r.wind,
+            "rn": r.rn,
+            "srqty": r.srqty,
+        }
+        for r in results
+    ]
+
+    return {"total": len(data), "data": data}

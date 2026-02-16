@@ -4,6 +4,8 @@ KMA 초단기 실황 API 라우터
 - 기상청 초단기 실황 데이터 조회 엔드포인트
 """
 
+import csv
+import os
 from typing import Optional, List
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, Query, HTTPException
@@ -19,6 +21,38 @@ router = APIRouter(
     prefix="/api/kma/realtime",
     tags=["KMA 초단기 실황"]
 )
+
+# --- 행정구역코드 매핑 로드 ---
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_CSV_PATH = os.path.join(_BASE_DIR, "..", "..", "..", "Agri-Weather_DB", "KMA", "region_preprocessed.csv")
+
+REGION_MAP: dict = {}   # {행정구역코드: {"region_name", "sido", "nx", "ny"}}
+REGION_LIST: list = []   # 전체 지역 목록
+
+
+def _load_region_map():
+    resolved = os.path.normpath(_CSV_PATH)
+    if not os.path.exists(resolved):
+        print(f"[WARN] region_preprocessed.csv not found: {resolved}")
+        return
+    with open(resolved, encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            code = row.get("행정구역코드", "").strip()
+            if not code:
+                continue
+            entry = {
+                "region_code": code,
+                "region_name": row.get("2단계", "").strip(),
+                "sido": row.get("1단계", "").strip(),
+                "nx": int(row.get("격자 X", 0)),
+                "ny": int(row.get("격자 Y", 0)),
+            }
+            REGION_MAP[code] = entry
+            REGION_LIST.append(entry)
+
+
+_load_region_map()
 
 
 @router.get("/latest", response_model=List[WeatherRealtimeResponse], summary="최신 초단기 실황 조회")
@@ -317,3 +351,71 @@ def get_realtime_sidos(db: Session = Depends(get_db)):
     ).distinct().order_by(WeatherRealtime.sido).all()
 
     return [r.sido for r in results if r.sido]
+
+
+# ===== 행정구역코드 기반 조회 =====
+
+@router.get("/code/regions", summary="행정구역코드 지역 목록 조회")
+def get_region_code_list():
+    """
+    조회 가능한 행정구역코드 목록을 반환합니다.
+    - region_code: 행정구역코드 (예: 4182000000)
+    - region_name: 지역명 (예: 가평군)
+    - sido: 시도 (예: 경기도)
+    - nx, ny: 기상청 격자 좌표
+    """
+    return REGION_LIST
+
+
+@router.get("/code/{region_code}", summary="행정구역코드로 최신 날씨 조회")
+def get_realtime_by_region_code(
+    region_code: str,
+    db: Session = Depends(get_db)
+):
+    """
+    행정구역코드로 특정 지역의 최신 초단기 실황 데이터를 피벗 형태로 반환합니다.
+    - region_code: 행정구역코드 (예: 4182000000)
+    - 응답: T1H(기온), RN1(강수량), REH(습도), WSD(풍속) 등
+    """
+    region_info = REGION_MAP.get(region_code)
+    if not region_info:
+        raise HTTPException(status_code=404, detail=f"행정구역코드 '{region_code}'에 해당하는 지역이 없습니다.")
+
+    region_name = region_info["region_name"]
+
+    latest = db.query(
+        WeatherRealtime.base_date,
+        WeatherRealtime.base_time
+    ).filter(
+        WeatherRealtime.region_name == region_name
+    ).order_by(
+        desc(WeatherRealtime.base_date),
+        desc(WeatherRealtime.base_time)
+    ).first()
+
+    if not latest:
+        raise HTTPException(status_code=404, detail=f"'{region_name}' 지역의 데이터가 없습니다.")
+
+    records = db.query(WeatherRealtime).filter(
+        WeatherRealtime.region_name == region_name,
+        WeatherRealtime.base_date == latest.base_date,
+        WeatherRealtime.base_time == latest.base_time
+    ).all()
+
+    pivot_data = {
+        "region_code": region_code,
+        "region_name": region_name,
+        "sido": region_info["sido"],
+        "nx": region_info["nx"],
+        "ny": region_info["ny"],
+        "base_date": latest.base_date.isoformat() if latest.base_date else None,
+        "base_time": latest.base_time,
+        "T1H": None, "RN1": None, "UUU": None, "VVV": None,
+        "REH": None, "PTY": None, "VEC": None, "WSD": None,
+    }
+
+    for r in records:
+        if r.category in pivot_data:
+            pivot_data[r.category] = r.obsrvalue
+
+    return pivot_data
