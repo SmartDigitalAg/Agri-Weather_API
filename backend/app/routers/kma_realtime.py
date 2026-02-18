@@ -7,7 +7,7 @@ KMA 초단기 실황 API 라우터
 import csv
 import os
 from typing import Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, String
@@ -146,8 +146,9 @@ def get_today_weather(
     - 시간순 오름차순 정렬 (그래프용)
     - T1H(기온), REH(습도) 값 반환
     """
-    # 오늘 날짜 (YYYY-MM-DD 형식 문자열)
-    today_str = datetime.now().strftime("%Y-%m-%d")
+    # 오늘 날짜 (한국시간 KST 기준)
+    KST = timezone(timedelta(hours=9))
+    today_date = datetime.now(KST).date()
 
     # 해당 지역의 오늘 데이터에서 고유 시간대 조회 (시간 오름차순)
     subquery = db.query(
@@ -155,7 +156,7 @@ def get_today_weather(
         WeatherRealtime.base_time
     ).filter(
         WeatherRealtime.region_name == region_name,
-        func.cast(WeatherRealtime.base_date, String) == today_str
+        WeatherRealtime.base_date == today_date
     ).distinct().order_by(
         WeatherRealtime.base_time.asc()
     )
