@@ -142,11 +142,6 @@ const CodeBlock = styled.pre`
   font-size: 13px;
   font-family: 'Consolas', monospace;
   line-height: 1.5;
-
-  .keyword { color: #569cd6; }
-  .string { color: #ce9178; }
-  .comment { color: #6a9955; }
-  .function { color: #dcdcaa; }
 `;
 
 const InfoBox = styled.div`
@@ -156,6 +151,16 @@ const InfoBox = styled.div`
   margin: 12px 0;
   border-radius: 0 4px 4px 0;
   font-size: 14px;
+`;
+
+const WarnBox = styled.div`
+  background: #fff3e0;
+  border-left: 4px solid #ff9800;
+  padding: 12px 16px;
+  margin: 12px 0;
+  border-radius: 0 4px 4px 0;
+  font-size: 14px;
+  color: #e65100;
 `;
 
 const DownloadLink = styled.a`
@@ -179,6 +184,14 @@ const UpdateFrequency = styled.div`
   border-radius: 0 4px 4px 0;
   font-size: 13px;
   color: #e65100;
+`;
+
+const DownloadCard = styled.div`
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
 `;
 
 type TabType = 'current' | 'past' | 'forecast';
@@ -217,13 +230,14 @@ const ApiDocs: React.FC = () => {
 // ===== 현재기상 =====
 const CurrentWeatherDocs: React.FC = () => (
   <>
+    {/* ===== 기상청(KMA, ASOS) ===== */}
     <Section>
-      <SectionTitle>KMA 실시간 기상 API</SectionTitle>
+      <SectionTitle>기상청 (KMA, ASOS)</SectionTitle>
 
-      {/* 최신 실시간 데이터 */}
+      {/* 1. 지역별 최신날씨 조회 */}
       <ApiCard>
-        <ApiTitle><Method>GET</Method> 최신 실시간 기상 데이터</ApiTitle>
-        <Endpoint>/api/kma/realtime/latest</Endpoint>
+        <ApiTitle><Method>GET</Method> 지역별 최신날씨 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/realtime/{'{지역코드}'}</Endpoint>
 
         <SubTitle>요청 파라미터</SubTitle>
         <Table>
@@ -231,174 +245,90 @@ const CurrentWeatherDocs: React.FC = () => (
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>선택</td><td>지역명 필터 (예: 서울)</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100, 최대: 100)</td></tr>
+            <tr><td><code>지역코드</code></td><td>string</td><td>필수 (경로)</td><td>행정구역코드 (예: 4182000000)</td></tr>
           </tbody>
         </Table>
 
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>id</code></td><td>integer</td><td>데이터 ID</td></tr>
-            <tr><td><code>stn_id</code></td><td>string</td><td>관측소 ID</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>tm</code></td><td>datetime</td><td>관측 시각</td></tr>
-            <tr><td><code>ta</code></td><td>float</td><td>기온 (°C)</td></tr>
-            <tr><td><code>rn</code></td><td>float</td><td>강수량 (mm)</td></tr>
-            <tr><td><code>ws</code></td><td>float</td><td>풍속 (m/s)</td></tr>
-            <tr><td><code>wd</code></td><td>float</td><td>풍향 (°)</td></tr>
-            <tr><td><code>hm</code></td><td>float</td><td>습도 (%)</td></tr>
-            <tr><td><code>pa</code></td><td>float</td><td>기압 (hPa)</td></tr>
-          </tbody>
-        </Table>
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "region_code": "4182000000",
+  "region_name": "가평군",
+  "sido": "경기도",
+  "nx": 69,
+  "ny": 133,
+  "base_date": "2025-01-15",
+  "base_time": "1400",
+  "T1H": 2.3,       // 기온 (°C)
+  "RN1": 0.0,       // 1시간 강수량 (mm)
+  "UUU": -0.5,      // 동서바람성분 (m/s)
+  "VVV": 1.2,       // 남북바람성분 (m/s)
+  "REH": 45.0,      // 습도 (%)
+  "PTY": 0.0,       // 강수형태 (0:없음, 1:비, 2:비/눈, 3:눈)
+  "VEC": 180.0,     // 풍향 (°)
+  "WSD": 1.5        // 풍속 (m/s)
+}`}</CodeBlock>
 
-        <SubTitle>예시 코드</SubTitle>
-        <CodeBlock>{`// JavaScript (fetch)
-const response = await fetch('${API_BASE_URL}/api/kma/realtime/latest?region_name=서울&limit=10');
-const data = await response.json();
-console.log(data);
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 매시 정각 (1시간 간격)
+        </UpdateFrequency>
+      </ApiCard>
 
-// Python (requests)
-import requests
-response = requests.get('${API_BASE_URL}/api/kma/realtime/latest',
-                        params={'region_name': '서울', 'limit': 10})
-data = response.json()`}</CodeBlock>
+      {/* 2. 지역 코드 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 조회 할 수 있는 지역 코드 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/realtime/region</Endpoint>
 
+        <SubTitle>요청 파라미터</SubTitle>
+        <InfoBox>파라미터 없음</InfoBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`[
+  {
+    "region_code": "4182000000",
+    "region_name": "가평군",
+    "sido": "경기도",
+    "nx": 69,
+    "ny": 133
+  },
+  {
+    "region_code": "1168000000",
+    "region_name": "강남구",
+    "sido": "서울특별시",
+    "nx": 61,
+    "ny": 126
+  },
+  ...
+]`}</CodeBlock>
+      </ApiCard>
+
+      {/* 3. 지역 정보 CSV 다운로드 */}
+      <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
-        <InfoBox>
-          <DownloadLink href="/region_files/kma_region.csv" download>
-            📥 kma_region.csv 다운로드
-          </DownloadLink>
-          <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
-            지점번호, 지점명, 관리관서 정보 포함
-          </p>
-        </InfoBox>
+        <DownloadLink href="/region_files/region_preprocessed.csv" download>
+          region_preprocessed.csv 다운로드
+        </DownloadLink>
+        <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
+          행정구역코드, 1단계(시도), 2단계(시군구), 3단계(읍면동), 격자 X, 격자 Y, 위경도 정보 포함
+        </p>
+      </DownloadCard>
 
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매시 정각 (1시간 간격)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* Pivot 형태 조회 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 최신 실시간 데이터 (Pivot)</ApiTitle>
-        <Endpoint>/api/kma/realtime/latest/pivot</Endpoint>
-
-        <SubTitle>요청 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 50, 최대: 100)</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>응답 설명</SubTitle>
-        <InfoBox>
-          지역별로 최신 1건씩 Pivot 형태로 조회합니다. 각 지역의 최신 관측값만 반환됩니다.
-        </InfoBox>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매시 정각 (1시간 간격)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* 지역별 범위 조회 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 지역별 기간 조회</ApiTitle>
-        <Endpoint>/api/kma/realtime/region/{'{region_name}'}/range</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>필수</td><td>지역명 (예: 서울)</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>쿼리 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>start_date</code></td><td>date</td><td>필수</td><td>조회 시작일 (YYYY-MM-DD)</td></tr>
-            <tr><td><code>end_date</code></td><td>date</td><td>필수</td><td>조회 종료일 (YYYY-MM-DD)</td></tr>
-            <tr><td><code>offset</code></td><td>integer</td><td>선택</td><td>페이지 오프셋 (기본: 0)</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>예시 코드</SubTitle>
-        <CodeBlock>{`// JavaScript
-const response = await fetch(
-  '${API_BASE_URL}/api/kma/realtime/region/서울/range?start_date=2024-01-01&end_date=2024-01-07'
-);
-const data = await response.json();
-
-// Python
-import requests
-response = requests.get(
-    '${API_BASE_URL}/api/kma/realtime/region/서울/range',
-    params={'start_date': '2024-01-01', 'end_date': '2024-01-07'}
-)`}</CodeBlock>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매시 정각 (1시간 간격)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* 지역 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 지역 목록 조회</ApiTitle>
-        <Endpoint>/api/kma/realtime/regions</Endpoint>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_id</code></td><td>string</td><td>관측소 ID</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>data_count</code></td><td>integer</td><td>데이터 수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 지역 목록은 고정적 (데이터 수만 변동)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* 시도 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 시도 목록 조회</ApiTitle>
-        <Endpoint>/api/kma/realtime/sidos</Endpoint>
-
-        <SubTitle>응답 설명</SubTitle>
-        <InfoBox>
-          시도별 지역 목록을 계층 구조로 반환합니다.
-        </InfoBox>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 고정적
-        </UpdateFrequency>
-      </ApiCard>
+      {/* 4. 원본데이터 명세서 다운로드 */}
+      <DownloadCard>
+        <SubTitle>원본데이터 명세서</SubTitle>
+        <DownloadLink href="/info_files/ASOS_KMA_info_forecast_short.docx" download>
+          ASOS_KMA_info_forecast_short.docx 다운로드
+        </DownloadLink>
+      </DownloadCard>
     </Section>
 
+    {/* ===== 국립농업과학원(RDA) ===== */}
     <Section>
-      <SectionTitle>RDA 실시간 기상 API</SectionTitle>
+      <SectionTitle>국립농업과학원 (RDA)</SectionTitle>
 
-      {/* RDA 최신 실시간 */}
+      {/* 1. 지역별 최신날씨 조회 */}
       <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 최신 실시간 데이터</ApiTitle>
-        <Endpoint>/api/rda/realtime/latest</Endpoint>
+        <ApiTitle><Method>GET</Method> 지역별 최신날씨 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/rda/realtime/{'{지점코드}'}</Endpoint>
 
         <SubTitle>요청 파라미터</SubTitle>
         <Table>
@@ -406,113 +336,79 @@ response = requests.get(
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>province</code></td><td>string</td><td>선택</td><td>도명 필터 (예: 경기도)</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>선택</td><td>지점명 필터</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
+            <tr><td><code>지점코드</code></td><td>string</td><td>필수 (경로)</td><td>관측소 지점코드 (예: 477802A001)</td></tr>
           </tbody>
         </Table>
 
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_cd</code></td><td>string</td><td>지점 코드</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>지점명</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>도명</td></tr>
-            <tr><td><code>obs_tm</code></td><td>datetime</td><td>관측 시각</td></tr>
-            <tr><td><code>ta</code></td><td>float</td><td>기온 (°C)</td></tr>
-            <tr><td><code>rn</code></td><td>float</td><td>강수량 (mm)</td></tr>
-            <tr><td><code>ws</code></td><td>float</td><td>풍속 (m/s)</td></tr>
-            <tr><td><code>hm</code></td><td>float</td><td>습도 (%)</td></tr>
-            <tr><td><code>sd_day</code></td><td>float</td><td>일조시간 (분)</td></tr>
-          </tbody>
-        </Table>
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "stn_cd": "477802A001",
+  "stn_name": "가평군 가평읍",
+  "province": "경기도",
+  "datetime": "2025-01-15T14:30:00",
+  "temp": 3.2,            // 기온 (°C)
+  "hghst_artmp": 5.1,     // 최고기온 (°C)
+  "lowst_artmp": -2.3,    // 최저기온 (°C)
+  "hum": 45.0,            // 습도 (%)
+  "widdir": 180,          // 풍향 (°)
+  "wind": 1.5,            // 풍속 (m/s)
+  "max_wind": 3.2,        // 최대풍속 (m/s)
+  "rn": 0.0,              // 강수량 (mm)
+  "sun_time": 120,        // 일조시간 (분)
+  "srqty": 0.5,           // 일사량 (MJ/m²)
+  "condens_time": null,   // 결로시간 (분)
+  "gr_temp": 2.1,         // 지면온도 (°C)
+  "soil_temp": 5.3,       // 토양온도 (°C)
+  "soil_wt": 30.2         // 토양수분 (%)
+}`}</CodeBlock>
 
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 10분 간격
+        </UpdateFrequency>
+      </ApiCard>
+
+      {/* 2. 지역 코드 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 조회 할 수 있는 지역 코드 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/rda/realtime/region</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <InfoBox>파라미터 없음</InfoBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`[
+  {
+    "stn_cd": "477802A001",
+    "stn_name": "가평군 가평읍",
+    "province": "경기도"
+  },
+  {
+    "stn_cd": "411801A001",
+    "stn_name": "고양시 구산동",
+    "province": "경기도"
+  },
+  ...
+]`}</CodeBlock>
+      </ApiCard>
+
+      {/* 3. 지역 정보 CSV 다운로드 */}
+      <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
-        <InfoBox>
-          <DownloadLink href="/region_files/rda_region_info.csv" download>
-            📥 region_info.csv 다운로드
-          </DownloadLink>
-          <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
-            도명, 지점명, 지점코드, 위도, 경도, 고도, 관측시작일 정보 포함
-          </p>
-        </InfoBox>
+        <DownloadLink href="/region_files/rda_region_info.csv" download>
+          region_info.csv 다운로드
+        </DownloadLink>
+        <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
+          도명, 지점명, 지점코드, 위도, 경도, 고도, 관측시작일 정보 포함
+        </p>
+      </DownloadCard>
 
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 10분 간격
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA 관측소별 조회 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 관측소별 실시간 데이터</ApiTitle>
-        <Endpoint>/api/rda/realtime/station/{'{stn_cd}'}</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_cd</code></td><td>string</td><td>필수</td><td>지점 코드</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>쿼리 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>offset</code></td><td>integer</td><td>선택</td><td>페이지 오프셋 (기본: 0)</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 10분 간격
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA 관측소 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 실시간 관측소 목록</ApiTitle>
-        <Endpoint>/api/rda/realtime/stations</Endpoint>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_cd</code></td><td>string</td><td>지점 코드</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>지점명</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>도명</td></tr>
-            <tr><td><code>data_count</code></td><td>integer</td><td>데이터 수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 고정적
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA 도별 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 도별 목록</ApiTitle>
-        <Endpoint>/api/rda/realtime/provinces</Endpoint>
-
-        <SubTitle>응답 설명</SubTitle>
-        <InfoBox>
-          도별 관측소 목록을 계층 구조로 반환합니다.
-        </InfoBox>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 고정적
-        </UpdateFrequency>
-      </ApiCard>
+      {/* 4. 원본데이터 명세서 다운로드 */}
+      <DownloadCard>
+        <SubTitle>원본데이터 명세서</SubTitle>
+        <DownloadLink href="/info_files/RDA_info.pdf" download>
+          RDA_info.pdf 다운로드
+        </DownloadLink>
+      </DownloadCard>
     </Section>
   </>
 );
@@ -520,13 +416,14 @@ response = requests.get(
 // ===== 과거기상 =====
 const PastWeatherDocs: React.FC = () => (
   <>
+    {/* ===== 기상청(KMA, ASOS) ===== */}
     <Section>
-      <SectionTitle>KMA ASOS 일별 기상 API</SectionTitle>
+      <SectionTitle>기상청 (KMA, ASOS)</SectionTitle>
 
-      {/* ASOS 최신 */}
+      {/* 1. 지역별 특정기간 과거기상 조회 */}
       <ApiCard>
-        <ApiTitle><Method>GET</Method> 최신 ASOS 일별 데이터</ApiTitle>
-        <Endpoint>/api/kma/asos/latest</Endpoint>
+        <ApiTitle><Method>GET</Method> 지역별 특정기간 과거기상 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/day/{'{지점번호}'}/{'{시작일자}'}/{'{종료일자}'}</Endpoint>
 
         <SubTitle>요청 파라미터</SubTitle>
         <Table>
@@ -534,155 +431,96 @@ const PastWeatherDocs: React.FC = () => (
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>선택</td><td>지역명 필터</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
+            <tr><td><code>지점번호</code></td><td>integer</td><td>필수 (경로)</td><td>관측소 지점번호 (예: 108)</td></tr>
+            <tr><td><code>시작일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 시작일 (yyyy-mm-dd 형식, 예: 2024-01-01)</td></tr>
+            <tr><td><code>종료일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 종료일 (yyyy-mm-dd 형식, 예: 2024-01-31)</td></tr>
           </tbody>
         </Table>
 
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_id</code></td><td>string</td><td>관측소 ID</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>obs_date</code></td><td>date</td><td>관측 일자</td></tr>
-            <tr><td><code>avg_ta</code></td><td>float</td><td>평균기온 (°C)</td></tr>
-            <tr><td><code>max_ta</code></td><td>float</td><td>최고기온 (°C)</td></tr>
-            <tr><td><code>min_ta</code></td><td>float</td><td>최저기온 (°C)</td></tr>
-            <tr><td><code>sum_rn</code></td><td>float</td><td>일강수량 (mm)</td></tr>
-            <tr><td><code>avg_ws</code></td><td>float</td><td>평균풍속 (m/s)</td></tr>
-            <tr><td><code>avg_rhm</code></td><td>float</td><td>평균습도 (%)</td></tr>
-            <tr><td><code>sum_ss</code></td><td>float</td><td>일조시간 (hr)</td></tr>
-          </tbody>
-        </Table>
+        <WarnBox>
+          <strong>* 참고:</strong> 가장 최근 종료일자는 <strong>현재일자보다 2일 전</strong>까지 가능합니다.
+        </WarnBox>
 
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "total": 31,
+  "data": [
+    {
+      "stn_id": 108,
+      "stn_nm": "서울",
+      "tm": "2024-01-01",
+      "avg_ta": 2.3,       // 평균기온 (°C)
+      "min_ta": -1.5,      // 최저기온 (°C)
+      "max_ta": 5.2,       // 최고기온 (°C)
+      "sum_rn": 0.0,       // 일강수량 (mm)
+      "avg_ws": 1.8,       // 평균풍속 (m/s)
+      "avg_rhm": 55.0,     // 평균상대습도 (%)
+      "sum_ss_hr": 6.5,    // 합계일조시간 (hr)
+      "sum_gsr": 8.2       // 합계일사량 (MJ/m²)
+    },
+    ...
+  ]
+}`}</CodeBlock>
+
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 매일 1회 (전일 데이터 기준, 2일 지연)
+        </UpdateFrequency>
+      </ApiCard>
+
+      {/* 2. 지역 및 관측 시작/마지막 일자 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 조회 할 수 있는 지역 및 관측 시작일자, 마지막 관측일자 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/day/region</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <InfoBox>파라미터 없음</InfoBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`[
+  {
+    "stn_id": 108,
+    "stn_nm": "서울",
+    "first_date": "2024-01-01",
+    "last_date": "2025-01-13"
+  },
+  {
+    "stn_id": 112,
+    "stn_nm": "인천",
+    "first_date": "2024-01-01",
+    "last_date": "2025-01-13"
+  },
+  ...
+]`}</CodeBlock>
+      </ApiCard>
+
+      {/* 3. 지역 정보 CSV 다운로드 */}
+      <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
-        <InfoBox>
-          <DownloadLink href="/region_files/kma_region.csv" download>
-            📥 kma_region.csv 다운로드
-          </DownloadLink>
-          <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
-            지점번호, 지점명, 관리관서 정보 포함
-          </p>
-        </InfoBox>
+        <DownloadLink href="/region_files/kma_region.csv" download>
+          kma_region.csv 다운로드
+        </DownloadLink>
+        <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
+          지점번호, 지점명, 관리관서, 관측시작일 정보 포함
+        </p>
+      </DownloadCard>
 
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매일 1회 (전일 데이터)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* ASOS 특정일 조회 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 특정일 ASOS 데이터</ApiTitle>
-        <Endpoint>/api/kma/asos/date/{'{target_date}'}</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>target_date</code></td><td>date</td><td>필수</td><td>조회 날짜 (YYYY-MM-DD)</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>쿼리 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>선택</td><td>지역명 필터</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>예시 코드</SubTitle>
-        <CodeBlock>{`// JavaScript
-const response = await fetch('${API_BASE_URL}/api/kma/asos/date/2024-01-15');
-const data = await response.json();
-
-// Python
-import requests
-response = requests.get('${API_BASE_URL}/api/kma/asos/date/2024-01-15')`}</CodeBlock>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매일 1회 (전일 데이터)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* ASOS 기간 조회 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> ASOS 기간 조회</ApiTitle>
-        <Endpoint>/api/kma/asos/range</Endpoint>
-
-        <SubTitle>요청 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>start_date</code></td><td>date</td><td>필수</td><td>조회 시작일 (YYYY-MM-DD)</td></tr>
-            <tr><td><code>end_date</code></td><td>date</td><td>필수</td><td>조회 종료일 (YYYY-MM-DD)</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>선택</td><td>지역명 필터</td></tr>
-            <tr><td><code>offset</code></td><td>integer</td><td>선택</td><td>페이지 오프셋</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>예시 코드</SubTitle>
-        <CodeBlock>{`// JavaScript
-const params = new URLSearchParams({
-  start_date: '2024-01-01',
-  end_date: '2024-01-31',
-  region_name: '서울'
-});
-const response = await fetch(\`\${API_BASE_URL}/api/kma/asos/range?\${params}\`);
-
-// Python
-import requests
-response = requests.get('${API_BASE_URL}/api/kma/asos/range', params={
-    'start_date': '2024-01-01',
-    'end_date': '2024-01-31',
-    'region_name': '서울'
-})`}</CodeBlock>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매일 1회 (전일 데이터)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* ASOS 관측소 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> ASOS 관측소 목록</ApiTitle>
-        <Endpoint>/api/kma/asos/stations</Endpoint>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_id</code></td><td>string</td><td>관측소 ID</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>data_count</code></td><td>integer</td><td>데이터 수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 고정적
-        </UpdateFrequency>
-      </ApiCard>
+      {/* 4. 원본데이터 명세서 다운로드 */}
+      <DownloadCard>
+        <SubTitle>원본데이터 명세서</SubTitle>
+        <DownloadLink href="/info_files/ASOS_KMA_info_day.docx" download>
+          ASOS_KMA_info_day.docx 다운로드
+        </DownloadLink>
+      </DownloadCard>
     </Section>
 
+    {/* ===== 국립농업과학원(RDA) ===== */}
     <Section>
-      <SectionTitle>RDA 일별 기상 API</SectionTitle>
+      <SectionTitle>국립농업과학원 (RDA)</SectionTitle>
 
-      {/* RDA Daily 최신 */}
+      {/* 1. 지역별 특정기간 과거기상 조회 */}
       <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 최신 일별 데이터</ApiTitle>
-        <Endpoint>/api/rda/daily/latest</Endpoint>
+        <ApiTitle><Method>GET</Method> 지역별 특정기간 과거기상 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/rda/day/{'{지점코드}'}/{'{시작일자}'}/{'{종료일자}'}</Endpoint>
 
         <SubTitle>요청 파라미터</SubTitle>
         <Table>
@@ -690,205 +528,85 @@ response = requests.get('${API_BASE_URL}/api/kma/asos/range', params={
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>province</code></td><td>string</td><td>선택</td><td>도명 필터</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>선택</td><td>지점명 필터</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
+            <tr><td><code>지점코드</code></td><td>string</td><td>필수 (경로)</td><td>관측소 지점코드 (예: 477802A001)</td></tr>
+            <tr><td><code>시작일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 시작일 (yyyy-mm-dd 형식, 예: 2024-01-01)</td></tr>
+            <tr><td><code>종료일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 종료일 (yyyy-mm-dd 형식, 예: 2024-01-31)</td></tr>
           </tbody>
         </Table>
 
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_cd</code></td><td>string</td><td>지점 코드</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>지점명</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>도명</td></tr>
-            <tr><td><code>obs_date</code></td><td>date</td><td>관측 일자</td></tr>
-            <tr><td><code>avg_ta</code></td><td>float</td><td>평균기온 (°C)</td></tr>
-            <tr><td><code>max_ta</code></td><td>float</td><td>최고기온 (°C)</td></tr>
-            <tr><td><code>min_ta</code></td><td>float</td><td>최저기온 (°C)</td></tr>
-            <tr><td><code>sum_rn</code></td><td>float</td><td>일강수량 (mm)</td></tr>
-            <tr><td><code>avg_ws</code></td><td>float</td><td>평균풍속 (m/s)</td></tr>
-            <tr><td><code>avg_hm</code></td><td>float</td><td>평균습도 (%)</td></tr>
-            <tr><td><code>sum_ss</code></td><td>float</td><td>일조시간 (hr)</td></tr>
-          </tbody>
-        </Table>
+        <WarnBox>
+          <strong>* 참고:</strong> 가장 최근 종료일자는 <strong>현재일자보다 2일 전</strong>까지 가능합니다.
+        </WarnBox>
 
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "total": 31,
+  "data": [
+    {
+      "stn_cd": "477802A001",
+      "stn_name": "가평군 가평읍",
+      "date": "2024-01-01",
+      "temp": 2.3,            // 평균기온 (°C)
+      "hghst_artmp": 5.1,     // 최고기온 (°C)
+      "lowst_artmp": -1.5,    // 최저기온 (°C)
+      "hum": 55.0,            // 평균습도 (%)
+      "wind": 1.8,            // 평균풍속 (m/s)
+      "rn": 0.0,              // 강수량 (mm)
+      "srqty": 8.2            // 일사량 (MJ/m²)
+    },
+    ...
+  ]
+}`}</CodeBlock>
+
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 매일 1회 (전일 데이터 기준, 2일 지연)
+        </UpdateFrequency>
+      </ApiCard>
+
+      {/* 2. 지역 코드 및 관측 시작/마지막 일자 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 조회 할 수 있는 지역 코드 및 관측 시작일자, 마지막 관측일자 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/rda/day/region</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <InfoBox>파라미터 없음</InfoBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`[
+  {
+    "stn_cd": "477802A001",
+    "stn_name": "가평군 가평읍",
+    "first_date": "2024-01-01",
+    "last_date": "2025-01-13"
+  },
+  {
+    "stn_cd": "411801A001",
+    "stn_name": "고양시 구산동",
+    "first_date": "2024-01-01",
+    "last_date": "2025-01-13"
+  },
+  ...
+]`}</CodeBlock>
+      </ApiCard>
+
+      {/* 3. 지역 정보 CSV 다운로드 */}
+      <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
-        <InfoBox>
-          <DownloadLink href="/region_files/rda_region_info.csv" download>
-            📥 region_info.csv 다운로드
-          </DownloadLink>
-          <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
-            도명, 지점명, 지점코드, 위도, 경도, 고도, 관측시작일 정보 포함
-          </p>
-        </InfoBox>
+        <DownloadLink href="/region_files/rda_region_info.csv" download>
+          region_info.csv 다운로드
+        </DownloadLink>
+        <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
+          도명, 지점명, 지점코드, 위도, 경도, 고도, 관측시작일 정보 포함
+        </p>
+      </DownloadCard>
 
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매일 1회
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA Daily 특정일 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 특정일 일별 데이터</ApiTitle>
-        <Endpoint>/api/rda/daily/date/{'{target_date}'}</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>target_date</code></td><td>date</td><td>필수</td><td>조회 날짜 (YYYY-MM-DD)</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매일 1회
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA Daily 기간 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 일별 기간 조회</ApiTitle>
-        <Endpoint>/api/rda/daily/range</Endpoint>
-
-        <SubTitle>요청 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>start_date</code></td><td>date</td><td>필수</td><td>조회 시작일</td></tr>
-            <tr><td><code>end_date</code></td><td>date</td><td>필수</td><td>조회 종료일</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>선택</td><td>도명 필터</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>선택</td><td>지점명 필터</td></tr>
-            <tr><td><code>offset</code></td><td>integer</td><td>선택</td><td>페이지 오프셋</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매일 1회
-        </UpdateFrequency>
-      </ApiCard>
-    </Section>
-
-    <Section>
-      <SectionTitle>RDA 월별 기상 API</SectionTitle>
-
-      {/* RDA Monthly 최신 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 최신 월별 데이터</ApiTitle>
-        <Endpoint>/api/rda/monthly/latest</Endpoint>
-
-        <SubTitle>요청 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>province</code></td><td>string</td><td>선택</td><td>도명 필터</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>선택</td><td>지점명 필터</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 100)</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_cd</code></td><td>string</td><td>지점 코드</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>지점명</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>도명</td></tr>
-            <tr><td><code>year</code></td><td>integer</td><td>연도</td></tr>
-            <tr><td><code>month</code></td><td>integer</td><td>월</td></tr>
-            <tr><td><code>avg_ta</code></td><td>float</td><td>월평균기온 (°C)</td></tr>
-            <tr><td><code>max_ta</code></td><td>float</td><td>월최고기온 (°C)</td></tr>
-            <tr><td><code>min_ta</code></td><td>float</td><td>월최저기온 (°C)</td></tr>
-            <tr><td><code>sum_rn</code></td><td>float</td><td>월강수량 (mm)</td></tr>
-            <tr><td><code>avg_ws</code></td><td>float</td><td>월평균풍속 (m/s)</td></tr>
-            <tr><td><code>avg_hm</code></td><td>float</td><td>월평균습도 (%)</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매월 1회
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA Monthly 연도별 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 연도별 월별 데이터</ApiTitle>
-        <Endpoint>/api/rda/monthly/year/{'{year}'}</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>year</code></td><td>integer</td><td>필수</td><td>조회 연도 (예: 2024)</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매월 1회
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA Monthly 기간 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 월별 기간 조회</ApiTitle>
-        <Endpoint>/api/rda/monthly/range</Endpoint>
-
-        <SubTitle>요청 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>start_year</code></td><td>integer</td><td>필수</td><td>조회 시작 연도</td></tr>
-            <tr><td><code>start_month</code></td><td>integer</td><td>필수</td><td>조회 시작 월</td></tr>
-            <tr><td><code>end_year</code></td><td>integer</td><td>필수</td><td>조회 종료 연도</td></tr>
-            <tr><td><code>end_month</code></td><td>integer</td><td>필수</td><td>조회 종료 월</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>선택</td><td>도명 필터</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>선택</td><td>지점명 필터</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 매월 1회
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* RDA 관측소 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> RDA 관측소 목록</ApiTitle>
-        <Endpoint>/api/rda/stations</Endpoint>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>stn_cd</code></td><td>string</td><td>지점 코드</td></tr>
-            <tr><td><code>stn_nm</code></td><td>string</td><td>지점명</td></tr>
-            <tr><td><code>province</code></td><td>string</td><td>도명</td></tr>
-            <tr><td><code>data_count</code></td><td>integer</td><td>데이터 수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 고정적
-        </UpdateFrequency>
-      </ApiCard>
+      {/* 4. 원본데이터 명세서 다운로드 */}
+      <DownloadCard>
+        <SubTitle>원본데이터 명세서</SubTitle>
+        <DownloadLink href="/info_files/RDA_info.pdf" download>
+          RDA_info.pdf 다운로드
+        </DownloadLink>
+      </DownloadCard>
     </Section>
   </>
 );
@@ -897,12 +615,12 @@ response = requests.get('${API_BASE_URL}/api/kma/asos/range', params={
 const ForecastDocs: React.FC = () => (
   <>
     <Section>
-      <SectionTitle>KMA 단기예보 API</SectionTitle>
+      <SectionTitle>기상청 (KMA, ASOS)</SectionTitle>
 
-      {/* 단기예보 최신 */}
+      {/* 1. 단기기상 예보 조회 */}
       <ApiCard>
-        <ApiTitle><Method>GET</Method> 최신 단기예보</ApiTitle>
-        <Endpoint>/api/kma/forecast/short/latest</Endpoint>
+        <ApiTitle><Method>GET</Method> 지역별 단기기상 예보 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/forecast/short/{'{지역코드}'}</Endpoint>
 
         <SubTitle>요청 파라미터</SubTitle>
         <Table>
@@ -910,137 +628,43 @@ const ForecastDocs: React.FC = () => (
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>선택</td><td>지역명 필터</td></tr>
-            <tr><td><code>category</code></td><td>string</td><td>선택</td><td>자료구분 (TMP, POP, SKY 등)</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 1000, 최대: 1000)</td></tr>
+            <tr><td><code>지역코드</code></td><td>string</td><td>필수 (경로)</td><td>행정구역코드 (예: 4182000000)</td></tr>
           </tbody>
         </Table>
 
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>base_date</code></td><td>string</td><td>발표일자 (YYYYMMDD)</td></tr>
-            <tr><td><code>base_time</code></td><td>string</td><td>발표시각 (HHMM)</td></tr>
-            <tr><td><code>fcst_date</code></td><td>string</td><td>예보일자 (YYYYMMDD)</td></tr>
-            <tr><td><code>fcst_time</code></td><td>string</td><td>예보시각 (HHMM)</td></tr>
-            <tr><td><code>category</code></td><td>string</td><td>자료구분</td></tr>
-            <tr><td><code>fcst_value</code></td><td>string</td><td>예보값</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>자료구분 (category) 설명</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>코드</th><th>설명</th><th>단위</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>TMP</code></td><td>기온</td><td>°C</td></tr>
-            <tr><td><code>TMN</code></td><td>최저기온</td><td>°C</td></tr>
-            <tr><td><code>TMX</code></td><td>최고기온</td><td>°C</td></tr>
-            <tr><td><code>POP</code></td><td>강수확률</td><td>%</td></tr>
-            <tr><td><code>PTY</code></td><td>강수형태</td><td>코드 (0:없음, 1:비, 2:비/눈, 3:눈, 4:소나기)</td></tr>
-            <tr><td><code>SKY</code></td><td>하늘상태</td><td>코드 (1:맑음, 3:구름많음, 4:흐림)</td></tr>
-            <tr><td><code>REH</code></td><td>습도</td><td>%</td></tr>
-            <tr><td><code>WSD</code></td><td>풍속</td><td>m/s</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>예시 코드</SubTitle>
-        <CodeBlock>{`// JavaScript
-const response = await fetch(
-  '${API_BASE_URL}/api/kma/forecast/short/latest?region_name=서울&category=TMP&limit=100'
-);
-const data = await response.json();
-
-// Python
-import requests
-response = requests.get('${API_BASE_URL}/api/kma/forecast/short/latest', params={
-    'region_name': '서울',
-    'category': 'TMP',
-    'limit': 100
-})`}</CodeBlock>
-
-        <SubTitle>지역 정보 파일</SubTitle>
-        <InfoBox>
-          <DownloadLink href="/region_files/region_latitude_longitude.csv" download>
-            📥 region_latitude_longitude.csv 다운로드
-          </DownloadLink>
-          <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
-            행정구역코드, 1단계, 2단계, 3단계, 격자 X, 격자 Y, 위도, 경도 정보 포함
-          </p>
-        </InfoBox>
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "region_code": "4182000000",
+  "region_name": "가평군",
+  "sido": "경기도",
+  "base_date": "2025-01-15",
+  "base_time": "0500",
+  "forecasts": [
+    {
+      "fcst_date": "2025-01-15",
+      "fcst_time": "0600",
+      "TMP": "2",        // 기온 (°C)
+      "TMN": "-3",       // 최저기온 (°C)
+      "TMX": "5",        // 최고기온 (°C)
+      "POP": "0",        // 강수확률 (%)
+      "PTY": "0",        // 강수형태 (0:없음, 1:비, 2:비/눈, 3:눈, 4:소나기)
+      "SKY": "1",        // 하늘상태 (1:맑음, 3:구름많음, 4:흐림)
+      "REH": "55",       // 습도 (%)
+      "WSD": "1.5"       // 풍속 (m/s)
+    },
+    ...
+  ]
+}`}</CodeBlock>
 
         <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 1일 8회 (02, 05, 08, 11, 14, 17, 20, 23시)
+          <strong>데이터 업데이트 주기:</strong> 1일 8회 (02, 05, 08, 11, 14, 17, 20, 23시)
         </UpdateFrequency>
       </ApiCard>
 
-      {/* 지역별 단기예보 */}
+      {/* 2. 중기기상 예보 조회 */}
       <ApiCard>
-        <ApiTitle><Method>GET</Method> 지역별 단기예보</ApiTitle>
-        <Endpoint>/api/kma/forecast/short/region/{'{region_name}'}</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>필수</td><td>지역명</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>쿼리 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>fcst_date</code></td><td>date</td><td>선택</td><td>예보일자 필터</td></tr>
-            <tr><td><code>category</code></td><td>string</td><td>선택</td><td>자료구분 필터</td></tr>
-            <tr><td><code>offset</code></td><td>integer</td><td>선택</td><td>페이지 오프셋</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 50)</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 1일 8회 (02, 05, 08, 11, 14, 17, 20, 23시)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* 단기예보 지역 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 단기예보 지역 목록</ApiTitle>
-        <Endpoint>/api/kma/forecast/short/regions</Endpoint>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>data_count</code></td><td>integer</td><td>데이터 수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 지역 목록은 고정적
-        </UpdateFrequency>
-      </ApiCard>
-    </Section>
-
-    <Section>
-      <SectionTitle>KMA 중기예보 API</SectionTitle>
-
-      {/* 중기예보 최신 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 최신 중기예보</ApiTitle>
-        <Endpoint>/api/kma/forecast/mid/latest</Endpoint>
+        <ApiTitle><Method>GET</Method> 지역별 중기기상 예보 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/forecast/mid/{'{지역코드}'}</Endpoint>
 
         <SubTitle>요청 파라미터</SubTitle>
         <Table>
@@ -1048,108 +672,104 @@ response = requests.get('${API_BASE_URL}/api/kma/forecast/short/latest', params=
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>선택</td><td>지역명 필터</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 50, 최대: 100)</td></tr>
+            <tr><td><code>지역코드</code></td><td>string</td><td>필수 (경로)</td><td>예보구역코드 (예: 11B00000)</td></tr>
           </tbody>
         </Table>
 
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>reg_id</code></td><td>string</td><td>예보구역코드</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>tm_fc</code></td><td>string</td><td>발표시각 (YYYYMMDDHHMM)</td></tr>
-            <tr><td><code>forecast_date</code></td><td>date</td><td>예보일자</td></tr>
-            <tr><td><code>wf_am</code></td><td>string</td><td>오전 날씨</td></tr>
-            <tr><td><code>wf_pm</code></td><td>string</td><td>오후 날씨</td></tr>
-            <tr><td><code>rn_st_am</code></td><td>integer</td><td>오전 강수확률 (%)</td></tr>
-            <tr><td><code>rn_st_pm</code></td><td>integer</td><td>오후 강수확률 (%)</td></tr>
-            <tr><td><code>ta_min</code></td><td>integer</td><td>최저기온 (°C)</td></tr>
-            <tr><td><code>ta_max</code></td><td>integer</td><td>최고기온 (°C)</td></tr>
-          </tbody>
-        </Table>
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "reg_id": "11B00000",
+  "region_name": "서울·인천·경기도",
+  "tm_fc": "202501150600",
+  "forecasts": [
+    {
+      "forecast_date": "2025-01-18",
+      "time_period": "오전",
+      "rain_prob": 20,             // 강수확률 (%)
+      "weather_condition": "맑음", // 날씨상태
+      "temp_min": -3,              // 최저기온 (°C)
+      "temp_max": 5                // 최고기온 (°C)
+    },
+    {
+      "forecast_date": "2025-01-18",
+      "time_period": "오후",
+      "rain_prob": 10,
+      "weather_condition": "구름많음",
+      "temp_min": -3,
+      "temp_max": 5
+    },
+    ...
+  ]
+}`}</CodeBlock>
 
-        <SubTitle>예시 코드</SubTitle>
-        <CodeBlock>{`// JavaScript
-const response = await fetch('${API_BASE_URL}/api/kma/forecast/mid/latest?region_name=서울');
-const data = await response.json();
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 1일 2회 (06시, 18시)
+        </UpdateFrequency>
+      </ApiCard>
 
-// Python
-import requests
-response = requests.get('${API_BASE_URL}/api/kma/forecast/mid/latest',
-                        params={'region_name': '서울'})`}</CodeBlock>
+      {/* 3. 지역 코드 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 조회 할 수 있는 지역 코드 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/forecast/region</Endpoint>
 
+        <SubTitle>요청 파라미터</SubTitle>
+        <InfoBox>파라미터 없음</InfoBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "short": [
+    {
+      "region_code": "4182000000",
+      "region_name": "가평군",
+      "sido": "경기도",
+      "nx": 69,
+      "ny": 133
+    },
+    ...
+  ],
+  "mid": [
+    {
+      "reg_id": "11B00000",
+      "region_name": "서울·인천·경기도"
+    },
+    {
+      "reg_id": "11D10000",
+      "region_name": "강원도영서"
+    },
+    ...
+  ]
+}`}</CodeBlock>
+      </ApiCard>
+
+      {/* 4. 지역 정보 CSV 다운로드 */}
+      <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
-        <InfoBox>
-          <DownloadLink href="/region_files/region_info_mid.csv" download>
-            📥 region_info_mid.csv 다운로드
-          </DownloadLink>
-          <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
-            예보구역코드, 구역명, 특성 정보 포함
-          </p>
-        </InfoBox>
+        <DownloadLink href="/region_files/region_latitude_longitude.csv" download>
+          region_latitude_longitude.csv 다운로드
+        </DownloadLink>
+        <p style={{margin: '8px 0 0 0', fontSize: '13px', color: '#666'}}>
+          행정구역코드, 1단계(시도), 2단계(시군구), 3단계(읍면동), 격자 X, 격자 Y, 위경도 정보 포함
+        </p>
+      </DownloadCard>
 
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 1일 2회 (06시, 18시)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* 지역별 중기예보 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 지역별 중기예보</ApiTitle>
-        <Endpoint>/api/kma/forecast/mid/region/{'{region_name}'}</Endpoint>
-
-        <SubTitle>경로 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>region_name</code></td><td>string</td><td>필수</td><td>지역명</td></tr>
-          </tbody>
-        </Table>
-
-        <SubTitle>쿼리 파라미터</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>forecast_date</code></td><td>date</td><td>선택</td><td>예보일자 필터</td></tr>
-            <tr><td><code>offset</code></td><td>integer</td><td>선택</td><td>페이지 오프셋</td></tr>
-            <tr><td><code>limit</code></td><td>integer</td><td>선택</td><td>조회 개수 (기본: 50)</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 1일 2회 (06시, 18시)
-        </UpdateFrequency>
-      </ApiCard>
-
-      {/* 중기예보 지역 목록 */}
-      <ApiCard>
-        <ApiTitle><Method>GET</Method> 중기예보 지역 목록</ApiTitle>
-        <Endpoint>/api/kma/forecast/mid/regions</Endpoint>
-
-        <SubTitle>응답 메시지</SubTitle>
-        <Table>
-          <thead>
-            <tr><th>필드</th><th>타입</th><th>설명</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><code>reg_id</code></td><td>string</td><td>예보구역코드</td></tr>
-            <tr><td><code>region_name</code></td><td>string</td><td>지역명</td></tr>
-            <tr><td><code>data_count</code></td><td>integer</td><td>데이터 수</td></tr>
-          </tbody>
-        </Table>
-
-        <UpdateFrequency>
-          <strong>업데이트 주기:</strong> 지역 목록은 고정적
-        </UpdateFrequency>
-      </ApiCard>
+      {/* 5. 원본데이터 명세서 다운로드 */}
+      <DownloadCard>
+        <SubTitle>원본데이터 명세서</SubTitle>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+          <div>
+            <DownloadLink href="/info_files/ASOS_KMA_info_forecast_short.docx" download>
+              ASOS_KMA_info_forecast_short.docx 다운로드
+            </DownloadLink>
+            <span style={{fontSize: '13px', color: '#666', marginLeft: '8px'}}>- 단기예보</span>
+          </div>
+          <div>
+            <DownloadLink href="/info_files/ASOS_KMA_info_forecast_mid.docx" download>
+              ASOS_KMA_info_forecast_mid.docx 다운로드
+            </DownloadLink>
+            <span style={{fontSize: '13px', color: '#666', marginLeft: '8px'}}>- 중기예보</span>
+          </div>
+        </div>
+      </DownloadCard>
     </Section>
   </>
 );
