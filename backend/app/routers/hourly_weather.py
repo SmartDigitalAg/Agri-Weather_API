@@ -8,6 +8,7 @@
 import httpx
 import csv
 import io
+import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
@@ -202,17 +203,54 @@ rda_hr_router = APIRouter(
 RDA_BASE_URL = "http://apis.data.go.kr/1390802/AgriWeather/WeatherObsrInfo/V3/GnrlWeather/getWeatherTimeList3"
 
 
+def parse_xml_items(xml_text: str) -> tuple:
+    """
+    XML 응답을 파싱하여 (result_code, result_msg, items) 튜플을 반환합니다.
+    """
+    try:
+        root = ET.fromstring(xml_text)
+
+        # 헤더 정보 추출
+        header = root.find(".//header")
+        result_code = None
+        result_msg = None
+
+        if header is not None:
+            code_elem = header.find("result_Code") or header.find("resultCode")
+            msg_elem = header.find("result_Msg") or header.find("resultMsg")
+            result_code = code_elem.text if code_elem is not None else None
+            result_msg = msg_elem.text if msg_elem is not None else None
+
+        # items 추출
+        items = []
+        body = root.find(".//body")
+        if body is not None:
+            items_elem = body.find("items")
+            if items_elem is not None:
+                for item in items_elem.findall("item"):
+                    item_dict = {}
+                    for child in item:
+                        item_dict[child.tag] = child.text
+                    items.append(item_dict)
+
+        return result_code, result_msg, items
+    except ET.ParseError as e:
+        print(f"[XML 파싱 오류] {str(e)}")
+        return None, str(e), []
+
+
 async def fetch_rda_hourly_data(stn_code: str, obs_date: str) -> List[dict]:
     """
     국립농업과학원 RDA 시간별 데이터를 조회합니다.
     - stn_code: 관측지점코드
     - obs_date: 관측년월일 (YYYYMMDD)
     """
+    # XML로 요청 (JSON이 무시되는 경우가 있음)
     params = {
         "serviceKey": SERVICE_KEY,
         "numOfRows": 100,
         "pageNo": 1,
-        "dataType": "JSON",
+        "dataType": "XML",
         "obsr_date": obs_date,
         "obsr_spot_code": stn_code
     }
@@ -220,45 +258,42 @@ async def fetch_rda_hourly_data(stn_code: str, obs_date: str) -> List[dict]:
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.get(RDA_BASE_URL, params=params)
+            print(f"[RDA HR] 요청 URL: {response.url}")
             response.raise_for_status()
 
-            # 응답 내용 확인 (JSON이 아닐 수 있음)
             content_type = response.headers.get("content-type", "")
             response_text = response.text
 
-            # JSON 파싱 시도
-            try:
-                data = response.json()
-            except Exception as json_err:
-                print(f"[RDA HR] JSON 파싱 실패. Content-Type: {content_type}")
-                print(f"[RDA HR] 응답 내용 (처음 500자): {response_text[:500]}")
-                raise HTTPException(status_code=500, detail=f"API 응답이 JSON 형식이 아닙니다: {str(json_err)}")
+            # XML 또는 JSON 응답 처리
+            if "xml" in content_type.lower():
+                # XML 파싱
+                result_code, result_msg, items = parse_xml_items(response_text)
 
-            # 응답 구조 파싱
-            if "response" not in data:
-                print(f"[RDA HR] 응답에 'response' 키 없음: {str(data)[:300]}")
-                raise HTTPException(status_code=500, detail="API 응답 형식 오류")
-
-            header = data["response"].get("header", {})
-            if header.get("resultCode") != "00":
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"API 오류: {header.get('resultMsg', '알 수 없는 오류')}"
-                )
-
-            body = data["response"].get("body", {})
-            items = body.get("items", {})
+                if result_code != "00":
+                    if result_code == "204":
+                        print(f"[RDA HR] 필수 파라미터 누락: stn_code={stn_code}, obs_date={obs_date}")
+                        return []
+                    print(f"[RDA HR] API 오류: {result_code} - {result_msg}")
+                    return []
+            else:
+                # JSON 파싱 시도
+                try:
+                    data = response.json()
+                    body = data.get("response", {}).get("body", {})
+                    items = body.get("items", {})
+                    if isinstance(items, dict):
+                        items = items.get("item", [])
+                    if isinstance(items, dict):
+                        items = [items]
+                except Exception as json_err:
+                    print(f"[RDA HR] JSON 파싱 실패: {str(json_err)}")
+                    # XML로 재시도
+                    result_code, result_msg, items = parse_xml_items(response_text)
+                    if result_code != "00":
+                        return []
 
             if not items:
                 return []
-
-            # items가 dict일 경우 item 추출
-            if isinstance(items, dict):
-                items = items.get("item", [])
-
-            # 단일 항목인 경우 리스트로 변환
-            if isinstance(items, dict):
-                items = [items]
 
             # 필요한 필드만 추출
             parsed_data = []
