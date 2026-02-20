@@ -50,13 +50,26 @@ async def fetch_aws_data(site: int, dev: int, year: int, month: int, day: int) -
     """
     url = f"{BASE_URL}?Site={site}&Dev={dev}&Year={year}&Mon={month:02d}&Day={day:02d}"
 
+    # 브라우저처럼 요청하기 위한 헤더 추가
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/plain, text/html, */*",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    }
+
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.get(url)
+            response = await client.get(url, headers=headers)
             response.raise_for_status()
 
             # 텍스트 데이터 파싱
             text_data = response.text
+
+            # 응답이 "NoFile" 또는 에러인 경우 처리
+            if not text_data or text_data.strip() == "NoFile" or text_data.strip() == "":
+                print(f"[AWS] 데이터 없음: Site={site}, Dev={dev}, {year}-{month:02d}-{day:02d}")
+                return []
+
             lines = text_data.strip().split('\n')
 
             parsed_data = []
@@ -66,10 +79,11 @@ async def fetch_aws_data(site: int, dev: int, year: int, month: int, day: int) -
 
                 # 탭이나 공백으로 구분된 데이터 파싱
                 parts = line.strip().split('\t')
-                if len(parts) < 1:
+                if len(parts) < 2:
                     parts = line.strip().split()
 
                 if len(parts) < 15:  # 최소 15개 컬럼 필요 (인덱스 14까지)
+                    print(f"[AWS] 컬럼 부족 (got {len(parts)}): {line[:50]}...")
                     continue
 
                 try:
@@ -83,13 +97,16 @@ async def fetch_aws_data(site: int, dev: int, year: int, month: int, day: int) -
                         "Rainfall": float(parts[14]) if len(parts) > 14 and parts[14] else None,
                     }
                     parsed_data.append(record)
-                except (ValueError, IndexError):
+                except (ValueError, IndexError) as e:
+                    print(f"[AWS] 파싱 오류: {line[:50]}... - {str(e)}")
                     continue
 
             return parsed_data
     except httpx.RequestError as e:
+        print(f"[AWS] 연결 오류: {url} - {str(e)}")
         raise HTTPException(status_code=503, detail=f"외부 서버 연결 실패: {str(e)}")
     except Exception as e:
+        print(f"[AWS] 처리 오류: {url} - {str(e)}")
         raise HTTPException(status_code=500, detail=f"데이터 처리 오류: {str(e)}")
 
 

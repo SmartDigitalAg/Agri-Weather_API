@@ -66,7 +66,18 @@ async def fetch_kma_hourly_data(stn_id: int, start_date: str, end_date: str) -> 
                 )
 
             body = data["response"].get("body", {})
-            items = body.get("items", {}).get("item", [])
+            items = body.get("items", {})
+
+            if not items:
+                return []
+
+            # items가 dict일 경우 item 추출
+            if isinstance(items, dict):
+                items = items.get("item", [])
+
+            # 단일 항목인 경우 리스트로 변환
+            if isinstance(items, dict):
+                items = [items]
 
             if not items:
                 return []
@@ -90,8 +101,10 @@ async def fetch_kma_hourly_data(stn_id: int, start_date: str, end_date: str) -> 
             return parsed_data
 
     except httpx.RequestError as e:
+        print(f"[KMA HR] 연결 오류: stn_id={stn_id}, {start_date}~{end_date} - {str(e)}")
         raise HTTPException(status_code=503, detail=f"외부 API 연결 실패: {str(e)}")
     except Exception as e:
+        print(f"[KMA HR] 처리 오류: stn_id={stn_id}, {start_date}~{end_date} - {str(e)}")
         raise HTTPException(status_code=500, detail=f"데이터 처리 오류: {str(e)}")
 
 
@@ -245,8 +258,10 @@ async def fetch_rda_hourly_data(stn_code: str, obs_date: str) -> List[dict]:
             return parsed_data
 
     except httpx.RequestError as e:
+        print(f"[RDA HR] 연결 오류: stn_code={stn_code}, obs_date={obs_date} - {str(e)}")
         raise HTTPException(status_code=503, detail=f"외부 API 연결 실패: {str(e)}")
     except Exception as e:
+        print(f"[RDA HR] 처리 오류: stn_code={stn_code}, obs_date={obs_date} - {str(e)}")
         raise HTTPException(status_code=500, detail=f"데이터 처리 오류: {str(e)}")
 
 
