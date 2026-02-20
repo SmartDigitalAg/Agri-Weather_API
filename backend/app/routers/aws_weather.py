@@ -77,13 +77,11 @@ async def fetch_aws_data(site: int, dev: int, year: int, month: int, day: int) -
                 if not line.strip():
                     continue
 
-                # 탭이나 공백으로 구분된 데이터 파싱
-                parts = line.strip().split('\t')
-                if len(parts) < 2:
-                    parts = line.strip().split()
+                # 쉼표로 구분된 CSV 형식 파싱
+                parts = line.strip().split(',')
 
                 if len(parts) < 15:  # 최소 15개 컬럼 필요 (인덱스 14까지)
-                    print(f"[AWS] 컬럼 부족 (got {len(parts)}): {line[:50]}...")
+                    print(f"[AWS] 컬럼 부족 (got {len(parts)}): {line[:80]}...")
                     continue
 
                 try:
