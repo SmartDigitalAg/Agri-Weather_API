@@ -11,6 +11,8 @@ import io
 import xml.etree.ElementTree as ET
 from datetime import date, datetime
 from typing import Optional, List
+
+import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
@@ -239,20 +241,23 @@ def parse_xml_items(xml_text: str) -> tuple:
         return None, str(e), []
 
 
-async def fetch_rda_hourly_data(stn_code: str, obs_date: str) -> List[dict]:
+async def fetch_rda_hourly_data(stn_code: str, obs_date: str, obsr_spot_nm: str) -> List[dict]:
     """
     국립농업과학원 RDA 시간별 데이터를 조회합니다.
     - stn_code: 관측지점코드
     - obs_date: 관측년월일 (YYYYMMDD)
     """
     # XML로 요청 (JSON이 무시되는 경우가 있음)
+    # 날짜 형식 정제 (YYYY-MM-DD)
+    obs_date = datetime.strptime(obs_date, "%Y%m%d").strftime("%Y-%m-%d")
+
     params = {
         "serviceKey": SERVICE_KEY,
-        "numOfRows": 100,
-        "pageNo": 1,
-        "dataType": "XML",
-        "obsr_date": obs_date,
-        "obsr_spot_code": stn_code
+        "Page_No": 1,
+        "page_Size": 100,
+        "date_Time": obs_date,
+        "obsr_Spot_Nm": obsr_spot_nm,
+        "obsr_spot_Cd": stn_code
     }
 
     try:
@@ -349,6 +354,20 @@ async def get_rda_hourly_data(
     - rn: 강수량 (mm)
     - srqty: 일사량 (MJ/m²)
     """
+
+    df = pd.read_csv("frontend/public/region_files/rda_region_info.csv")
+
+    # obsr_spot_nm 추출
+    obsr_spot_nm = None
+    for _, row in df.iterrows():
+        if row["지점코드"] == stn_code:
+            obsr_spot_nm = row["지점명"]
+            break
+
+    if not obsr_spot_nm:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 관측지점코드: {stn_code}")
+
+
     # 날짜 형식 검증
     try:
         start_dt = datetime.strptime(start_date, "%Y%m%d")
@@ -371,7 +390,7 @@ async def get_rda_hourly_data(
     while current_dt <= end_dt:
         obs_date = current_dt.strftime("%Y%m%d")
         try:
-            day_data = await fetch_rda_hourly_data(stn_code, obs_date)
+            day_data = await fetch_rda_hourly_data(stn_code, obs_date, obsr_spot_nm)
             all_data.extend(day_data)
         except HTTPException:
             # 특정 날짜 데이터 실패 시 건너뛰기
