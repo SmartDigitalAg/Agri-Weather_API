@@ -10,6 +10,7 @@ const categories: { key: DataCategory; label: string }[] = [
   { key: 'current', label: '현재기상' },
   { key: 'past', label: '과거기상' },
   { key: 'forecast', label: '기상예보' },
+  { key: 'aws', label: 'AWS(기상대)' },
   { key: 'api', label: 'API설명' },
 ];
 

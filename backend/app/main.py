@@ -20,7 +20,10 @@ from .routers import (
     rda_weather_router,
     rda_day_router,
     download_router,
-    stats_router
+    stats_router,
+    aws_weather_router,
+    kma_hr_router,
+    rda_hr_router
 )
 
 settings = get_settings()
@@ -120,6 +123,9 @@ app.include_router(rda_weather_router)
 app.include_router(rda_day_router)
 app.include_router(download_router)
 app.include_router(stats_router)
+app.include_router(aws_weather_router)
+app.include_router(kma_hr_router)
+app.include_router(rda_hr_router)
 
 
 # 루트 엔드포인트

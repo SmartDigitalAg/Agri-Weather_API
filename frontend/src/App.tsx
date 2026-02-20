@@ -4,6 +4,7 @@ import Sidebar from './components/Sidebar';
 import CurrentWeather from './pages/CurrentWeather';
 import PastWeather from './pages/PastWeather';
 import WeatherForecast from './pages/WeatherForecast';
+import AwsWeather from './pages/AwsWeather';
 import ApiDocs from './pages/ApiDocs';
 import type { DataCategory } from './types';
 
@@ -20,6 +21,8 @@ function App() {
         return <PastWeather />;
       case 'forecast':
         return <WeatherForecast />;
+      case 'aws':
+        return <AwsWeather />;
       case 'api':
         return <ApiDocs />;
       default:

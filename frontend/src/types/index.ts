@@ -26,7 +26,7 @@ export interface Region {
 
 // 데이터 소스 타입
 export type DataSource = 'RDA' | 'KMA';
-export type DataCategory = 'current' | 'past' | 'forecast' | 'api';
+export type DataCategory = 'current' | 'past' | 'forecast' | 'aws' | 'api';
 
 // 선택된 옵션들
 export interface SelectedOptions {

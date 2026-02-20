@@ -7,6 +7,9 @@ const API_BASE_URL = 'http://3.35.171.253:8001';
 // 기관 타입
 type Institution = 'RDA' | 'KMA';
 
+// 데이터 유형 탭
+type DataType = 'daily' | 'hourly';
+
 // RDA 관측소 정보 (일별 데이터 기준 - 기간 포함)
 interface RdaStation {
   stn_cd: string;
@@ -54,6 +57,33 @@ interface KmaAsosData {
   avg_rhm: number | null; // 평균상대습도
   sum_ss_hr: number | null; // 일조시간
   sum_gsr: number | null;   // 일사량
+}
+
+// KMA 시간별 기상 데이터
+interface KmaHourlyData {
+  tm: string;             // 시간
+  stnId: string;          // 지점번호
+  stnNm: string;          // 지점명
+  ta: string | null;      // 기온
+  rn: string | null;      // 강수량
+  ws: string | null;      // 풍속
+  wd: string | null;      // 풍향
+  hm: string | null;      // 습도
+  icsr: string | null;    // 일사량
+}
+
+// RDA 시간별 기상 데이터
+interface RdaHourlyData {
+  stn_Cd: string;         // 관측지점코드
+  stn_Name: string;       // 관측지점명
+  date: string;           // 관측일자
+  time: string;           // 관측시간
+  temp: string | null;    // 기온
+  hum: string | null;     // 습도
+  widdir: string | null;  // 풍향
+  wind: string | null;    // 풍속
+  rn: string | null;      // 강수량
+  srqty: string | null;   // 일사량
 }
 
 // 2일 전 날짜 계산
@@ -181,6 +211,9 @@ const getProvinceFromStationName = (stnName: string): string => {
 };
 
 const PastWeather = () => {
+  // 데이터 유형 탭 (일별/시간별)
+  const [dataType, setDataType] = useState<DataType>('daily');
+
   // 기관 선택
   const [institution, setInstitution] = useState<Institution>('RDA');
 
@@ -211,12 +244,23 @@ const PastWeather = () => {
   const [endMonth, setEndMonth] = useState<number>(0);
   const [endDay, setEndDay] = useState<number>(0);
 
-  // 조회 결과
+  // 조회 결과 (일별)
   const [queryResults, setQueryResults] = useState<(RdaDailyData | KmaAsosData)[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [showResults, setShowResults] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+
+  // 조회 결과 (시간별)
+  const [hourlyResults, setHourlyResults] = useState<(KmaHourlyData | RdaHourlyData)[]>([]);
+  const [hourlyTotalCount, setHourlyTotalCount] = useState<number>(0);
+  const [showHourlyResults, setShowHourlyResults] = useState<boolean>(false);
+  const [hourlyLoading, setHourlyLoading] = useState<boolean>(false);
+  const [hourlyError, setHourlyError] = useState<string | null>(null);
+
+  // 시간별 조회용 날짜 (YYYYMMDD 형식)
+  const [hourlyStartDate, setHourlyStartDate] = useState<string>('');
+  const [hourlyEndDate, setHourlyEndDate] = useState<string>('');
 
   // RDA 관측소 목록 로드 (일별 데이터 기준)
   useEffect(() => {
@@ -361,6 +405,8 @@ const PastWeather = () => {
   useEffect(() => {
     setShowResults(false);
     setQueryResults([]);
+    setShowHourlyResults(false);
+    setHourlyResults([]);
     setDataStartDate(null);
     setDataEndDate(null);
     resetDateSelections();
@@ -371,6 +417,33 @@ const PastWeather = () => {
       setSelectedRdaStation('');
     }
   }, [institution]);
+
+  // 데이터 유형 변경 시 결과 초기화
+  useEffect(() => {
+    setShowResults(false);
+    setQueryResults([]);
+    setShowHourlyResults(false);
+    setHourlyResults([]);
+    setError(null);
+    setHourlyError(null);
+  }, [dataType]);
+
+  // 시간별 날짜 기본값 설정 (최근 3일)
+  useEffect(() => {
+    const today = new Date();
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(today.getDate() - 3);
+
+    const formatDateYYYYMMDD = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}${month}${day}`;
+    };
+
+    setHourlyStartDate(formatDateYYYYMMDD(threeDaysAgo));
+    setHourlyEndDate(formatDateYYYYMMDD(today));
+  }, []);
 
   // 연도/월/일 옵션 계산
   const yearOptions = useMemo(() => {
@@ -448,6 +521,201 @@ const PastWeather = () => {
       setLoading(false);
     }
   };
+
+  // 시간별 데이터 조회
+  const handleHourlyQuery = async () => {
+    if (!hourlyStartDate || !hourlyEndDate) {
+      setHourlyError('기간을 입력해주세요.');
+      return;
+    }
+
+    // 날짜 형식 검증 (YYYYMMDD)
+    if (!/^\d{8}$/.test(hourlyStartDate) || !/^\d{8}$/.test(hourlyEndDate)) {
+      setHourlyError('날짜 형식은 YYYYMMDD 여야 합니다.');
+      return;
+    }
+
+    setHourlyLoading(true);
+    setHourlyError(null);
+
+    try {
+      if (institution === 'RDA' && selectedRdaStation) {
+        // RDA 시간별 데이터 조회
+        const response = await fetch(
+          `${API_BASE_URL}/api/rda/weather/hr/${selectedRdaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setHourlyResults(data.data || []);
+          setHourlyTotalCount(data.total || 0);
+          setShowHourlyResults(true);
+        } else {
+          const errorData = await response.json();
+          setHourlyError(errorData.detail || '데이터 조회 실패');
+        }
+      } else if (institution === 'KMA' && selectedKmaStation) {
+        // KMA 시간별 데이터 조회
+        const response = await fetch(
+          `${API_BASE_URL}/api/kma/asos/hr/${selectedKmaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setHourlyResults(data.data || []);
+          setHourlyTotalCount(data.total || 0);
+          setShowHourlyResults(true);
+        } else {
+          const errorData = await response.json();
+          setHourlyError(errorData.detail || '데이터 조회 실패');
+        }
+      }
+    } catch (err) {
+      console.error('시간별 데이터 조회 실패:', err);
+      setHourlyError('데이터 조회 중 오류가 발생했습니다.');
+    } finally {
+      setHourlyLoading(false);
+    }
+  };
+
+  // 시간별 데이터 다운로드 (CSV)
+  const handleHourlyDownloadCsv = async () => {
+    if (!hourlyStartDate || !hourlyEndDate) return;
+
+    setDownloadLoading('hourly-csv');
+
+    try {
+      let url = '';
+      if (institution === 'RDA' && selectedRdaStation) {
+        url = `${API_BASE_URL}/api/rda/weather/hr/${selectedRdaStation}/${hourlyStartDate}/${hourlyEndDate}?format=csv`;
+      } else if (institution === 'KMA' && selectedKmaStation) {
+        url = `${API_BASE_URL}/api/kma/asos/hr/${selectedKmaStation}/${hourlyStartDate}/${hourlyEndDate}?format=csv`;
+      }
+
+      const response = await fetch(url);
+      if (response.ok) {
+        const blob = await response.blob();
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const stationName = institution === 'RDA' ? selectedRdaStation : selectedKmaStation;
+        link.download = `${institution.toLowerCase()}_hourly_${stationName}_${hourlyStartDate}_${hourlyEndDate}.csv`;
+        link.click();
+      } else {
+        setHourlyError('다운로드 실패');
+      }
+    } catch (err) {
+      console.error('다운로드 실패:', err);
+      setHourlyError('다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setDownloadLoading(null);
+    }
+  };
+
+  // 시간별 데이터 다운로드 (JSON)
+  const handleHourlyDownloadJson = async () => {
+    if (!hourlyStartDate || !hourlyEndDate) return;
+
+    setDownloadLoading('hourly-json');
+
+    try {
+      let url = '';
+      if (institution === 'RDA' && selectedRdaStation) {
+        url = `${API_BASE_URL}/api/rda/weather/hr/${selectedRdaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`;
+      } else if (institution === 'KMA' && selectedKmaStation) {
+        url = `${API_BASE_URL}/api/kma/asos/hr/${selectedKmaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`;
+      }
+
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        const stationName = institution === 'RDA' ? selectedRdaStation : selectedKmaStation;
+        link.download = `${institution.toLowerCase()}_hourly_${stationName}_${hourlyStartDate}_${hourlyEndDate}.json`;
+        link.click();
+      } else {
+        setHourlyError('다운로드 실패');
+      }
+    } catch (err) {
+      console.error('다운로드 실패:', err);
+      setHourlyError('다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setDownloadLoading(null);
+    }
+  };
+
+  // 시간별 데이터 다운로드 (Excel)
+  const handleHourlyDownloadExcel = async () => {
+    if (!hourlyStartDate || !hourlyEndDate) return;
+
+    setDownloadLoading('hourly-excel');
+
+    try {
+      let url = '';
+      if (institution === 'RDA' && selectedRdaStation) {
+        url = `${API_BASE_URL}/api/rda/weather/hr/${selectedRdaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`;
+      } else if (institution === 'KMA' && selectedKmaStation) {
+        url = `${API_BASE_URL}/api/kma/asos/hr/${selectedKmaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`;
+      }
+
+      const response = await fetch(url);
+      if (response.ok) {
+        const result = await response.json();
+        const data = result.data || [];
+
+        let wsData: any[][];
+        if (institution === 'KMA') {
+          wsData = [
+            ['시간', '지점번호', '지점명', '기온(°C)', '강수량(mm)', '풍속(m/s)', '풍향(°)', '습도(%)', '일사량(MJ/m²)'],
+            ...data.map((row: KmaHourlyData) => [
+              row.tm || '',
+              row.stnId || '',
+              row.stnNm || '',
+              row.ta ?? '',
+              row.rn ?? '',
+              row.ws ?? '',
+              row.wd ?? '',
+              row.hm ?? '',
+              row.icsr ?? ''
+            ])
+          ];
+        } else {
+          wsData = [
+            ['날짜', '시간', '지점코드', '지점명', '기온(°C)', '습도(%)', '풍향(°)', '풍속(m/s)', '강수량(mm)', '일사량(MJ/m²)'],
+            ...data.map((row: RdaHourlyData) => [
+              row.date || '',
+              row.time || '',
+              row.stn_Cd || '',
+              row.stn_Name || '',
+              row.temp ?? '',
+              row.hum ?? '',
+              row.widdir ?? '',
+              row.wind ?? '',
+              row.rn ?? '',
+              row.srqty ?? ''
+            ])
+          ];
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '시간별기상데이터');
+        const stationName = institution === 'RDA' ? selectedRdaStation : selectedKmaStation;
+        XLSX.writeFile(wb, `${institution.toLowerCase()}_hourly_${stationName}_${hourlyStartDate}_${hourlyEndDate}.xlsx`);
+      } else {
+        setHourlyError('다운로드 실패');
+      }
+    } catch (err) {
+      console.error('다운로드 실패:', err);
+      setHourlyError('다운로드 중 오류가 발생했습니다.');
+    } finally {
+      setDownloadLoading(null);
+    }
+  };
+
+  // 시간별 조회 가능 여부
+  const canHourlyQuery = institution === 'RDA'
+    ? selectedRdaStation && hourlyStartDate && hourlyEndDate
+    : selectedKmaStation && hourlyStartDate && hourlyEndDate;
 
   // 다운로드 로딩 상태
   const [downloadLoading, setDownloadLoading] = useState<string | null>(null);
@@ -697,6 +965,30 @@ const PastWeather = () => {
       {/* Page Title */}
       <h2 className="text-base font-medium text-gray-600">과거기상현황</h2>
 
+      {/* 데이터 유형 탭 */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setDataType('daily')}
+          className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+            dataType === 'daily'
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          일별 자료
+        </button>
+        <button
+          onClick={() => setDataType('hourly')}
+          className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+            dataType === 'hourly'
+              ? 'bg-green-600 text-white'
+              : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+          }`}
+        >
+          시간별 자료
+        </button>
+      </div>
+
       {/* Top Section: Data Selection | Map */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Data Selection Section */}
@@ -766,7 +1058,8 @@ const PastWeather = () => {
           </div>
         </div>
 
-        {/* 기간 선택 */}
+        {/* 기간 선택 - 일별 자료 */}
+        {dataType === 'daily' && (
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">기간</label>
           <div className="flex flex-wrap items-center gap-2">
@@ -877,6 +1170,59 @@ const PastWeather = () => {
             <p className="mt-2 text-sm text-red-500">{error}</p>
           )}
         </div>
+        )}
+
+        {/* 기간 선택 - 시간별 자료 */}
+        {dataType === 'hourly' && (
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">기간 (YYYYMMDD 형식)</label>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">시작</span>
+              <input
+                type="text"
+                value={hourlyStartDate}
+                onChange={(e) => setHourlyStartDate(e.target.value)}
+                placeholder="20260101"
+                maxLength={8}
+                className="w-28 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+              />
+            </div>
+
+            <span className="text-gray-500 mx-2">~</span>
+
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">종료</span>
+              <input
+                type="text"
+                value={hourlyEndDate}
+                onChange={(e) => setHourlyEndDate(e.target.value)}
+                placeholder="20260131"
+                maxLength={8}
+                className="w-28 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+              />
+            </div>
+
+            {/* 조회 버튼 */}
+            <button
+              onClick={handleHourlyQuery}
+              disabled={!canHourlyQuery || hourlyLoading}
+              className="ml-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              {hourlyLoading ? '조회 중...' : '조회'}
+            </button>
+          </div>
+
+          <p className="mt-2 text-xs text-gray-500">
+            * KMA: 최대 31일, RDA: 최대 7일까지 조회 가능
+          </p>
+
+          {/* 에러 메시지 */}
+          {hourlyError && (
+            <p className="mt-2 text-sm text-red-500">{hourlyError}</p>
+          )}
+        </div>
+        )}
         </div>
 
         {/* Map Section */}
@@ -891,8 +1237,8 @@ const PastWeather = () => {
         />
       </div>
 
-      {/* Results Section */}
-      {showResults && (
+      {/* Results Section - 일별 자료 */}
+      {dataType === 'daily' && showResults && (
         <div className="bg-white rounded-xl shadow-lg p-6">
           {/* 상단 정보 및 다운로드 */}
           <div className="mb-4">
@@ -1026,6 +1372,131 @@ const PastWeather = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Results Section - 시간별 자료 */}
+      {dataType === 'hourly' && showHourlyResults && (
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          {/* 상단 정보 및 다운로드 */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-semibold text-gray-800">
+                시간별 조회 결과 <span className="text-sm font-normal text-gray-500">(총 {hourlyTotalCount}건)</span>
+              </h3>
+            </div>
+
+            {/* 조회 기간 정보 */}
+            <div className="bg-gray-50 rounded-lg p-3 mb-3">
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">조회 기간:</span> {hourlyStartDate} ~ {hourlyEndDate}
+              </p>
+            </div>
+
+            {/* 다운로드 버튼 그룹 */}
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleHourlyDownloadCsv}
+                disabled={downloadLoading !== null}
+                className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                {downloadLoading === 'hourly-csv' ? '다운로드 중...' : 'CSV 다운로드'}
+              </button>
+              <button
+                onClick={handleHourlyDownloadJson}
+                disabled={downloadLoading !== null}
+                className="px-4 py-2 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                {downloadLoading === 'hourly-json' ? '다운로드 중...' : 'JSON 다운로드'}
+              </button>
+              <button
+                onClick={handleHourlyDownloadExcel}
+                disabled={downloadLoading !== null}
+                className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                {downloadLoading === 'hourly-excel' ? '다운로드 중...' : 'Excel 다운로드'}
+              </button>
+            </div>
+          </div>
+
+          {/* 테이블 */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100">
+                  {institution === 'KMA' ? (
+                    <>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">시간</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">지점번호</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">지점명</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">기온(°C)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">강수량(mm)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">풍속(m/s)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">풍향(°)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">습도(%)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">일사량(MJ/m²)</th>
+                    </>
+                  ) : (
+                    <>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">날짜</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">시간</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">지점코드</th>
+                      <th className="px-4 py-3 text-left font-medium text-gray-700">지점명</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">기온(°C)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">습도(%)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">풍향(°)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">풍속(m/s)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">강수량(mm)</th>
+                      <th className="px-4 py-3 text-right font-medium text-gray-700">일사량(MJ/m²)</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {hourlyResults.length === 0 ? (
+                  <tr>
+                    <td colSpan={institution === 'KMA' ? 9 : 10} className="px-4 py-8 text-center text-gray-500">
+                      조회된 데이터가 없습니다.
+                    </td>
+                  </tr>
+                ) : institution === 'KMA' ? (
+                  (hourlyResults as KmaHourlyData[]).slice(0, 50).map((row, index) => (
+                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3">{row.tm}</td>
+                      <td className="px-4 py-3">{row.stnId}</td>
+                      <td className="px-4 py-3">{row.stnNm}</td>
+                      <td className="px-4 py-3 text-right">{row.ta ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.rn ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.ws ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.wd ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.hm ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.icsr ?? '-'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  (hourlyResults as RdaHourlyData[]).slice(0, 50).map((row, index) => (
+                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                      <td className="px-4 py-3">{row.date}</td>
+                      <td className="px-4 py-3">{row.time}</td>
+                      <td className="px-4 py-3">{row.stn_Cd}</td>
+                      <td className="px-4 py-3">{row.stn_Name}</td>
+                      <td className="px-4 py-3 text-right">{row.temp ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.hum ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.widdir ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.wind ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.rn ?? '-'}</td>
+                      <td className="px-4 py-3 text-right">{row.srqty ?? '-'}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+            {hourlyResults.length > 50 && (
+              <p className="mt-2 text-sm text-gray-500 text-center">
+                * 미리보기는 최대 50건까지 표시됩니다. 전체 데이터는 다운로드를 이용해주세요.
+              </p>
+            )}
           </div>
         </div>
       )}
