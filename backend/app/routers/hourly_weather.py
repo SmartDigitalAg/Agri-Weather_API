@@ -277,7 +277,13 @@ async def fetch_rda_hourly_data(stn_code: str, obs_date: str, obsr_spot_nm: str)
                 # XML 파싱
                 result_code, result_msg, items = parse_xml_items(response_text)
 
-                if result_code != "00":
+                # 디버깅: result_code가 None인 경우 XML 내용 출력
+                if result_code is None:
+                    print(f"[RDA HR] result_code가 None입니다. XML 내용 (처음 1000자):")
+                    print(response_text[:1000])
+
+                # result_code가 에러인 경우에만 반환 (None이거나 00이면 계속 진행)
+                if result_code is not None and result_code != "00":
                     if result_code == "204":
                         print(f"[RDA HR] 필수 파라미터 누락: stn_code={stn_code}, obs_date={obs_date}")
                         return []
