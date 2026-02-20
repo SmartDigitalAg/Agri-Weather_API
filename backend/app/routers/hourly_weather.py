@@ -52,10 +52,21 @@ async def fetch_kma_hourly_data(stn_id: int, start_date: str, end_date: str) -> 
             response = await client.get(KMA_BASE_URL, params=params)
             response.raise_for_status()
 
-            data = response.json()
+            # 응답 내용 확인 (JSON이 아닐 수 있음)
+            content_type = response.headers.get("content-type", "")
+            response_text = response.text
+
+            # JSON 파싱 시도
+            try:
+                data = response.json()
+            except Exception as json_err:
+                print(f"[KMA HR] JSON 파싱 실패. Content-Type: {content_type}")
+                print(f"[KMA HR] 응답 내용 (처음 500자): {response_text[:500]}")
+                raise HTTPException(status_code=500, detail=f"API 응답이 JSON 형식이 아닙니다: {str(json_err)}")
 
             # 응답 구조 파싱
             if "response" not in data:
+                print(f"[KMA HR] 응답에 'response' 키 없음: {str(data)[:300]}")
                 raise HTTPException(status_code=500, detail="API 응답 형식 오류")
 
             header = data["response"].get("header", {})
@@ -211,10 +222,21 @@ async def fetch_rda_hourly_data(stn_code: str, obs_date: str) -> List[dict]:
             response = await client.get(RDA_BASE_URL, params=params)
             response.raise_for_status()
 
-            data = response.json()
+            # 응답 내용 확인 (JSON이 아닐 수 있음)
+            content_type = response.headers.get("content-type", "")
+            response_text = response.text
+
+            # JSON 파싱 시도
+            try:
+                data = response.json()
+            except Exception as json_err:
+                print(f"[RDA HR] JSON 파싱 실패. Content-Type: {content_type}")
+                print(f"[RDA HR] 응답 내용 (처음 500자): {response_text[:500]}")
+                raise HTTPException(status_code=500, detail=f"API 응답이 JSON 형식이 아닙니다: {str(json_err)}")
 
             # 응답 구조 파싱
             if "response" not in data:
+                print(f"[RDA HR] 응답에 'response' 키 없음: {str(data)[:300]}")
                 raise HTTPException(status_code=500, detail="API 응답 형식 오류")
 
             header = data["response"].get("header", {})
