@@ -5,6 +5,7 @@
 - 외부 공공데이터 API를 호출하여 데이터를 가져옴
 """
 
+import os
 import httpx
 import csv
 import io
@@ -15,6 +16,10 @@ from typing import Optional, List
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
+
+# 경로 설정
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_RDA_REGION_CSV = os.path.join(_BASE_DIR, "..", "..", "..", "frontend", "public", "region_files", "rda_region_info.csv")
 
 # ============================================================
 # KMA 시간별 데이터 API
@@ -355,7 +360,7 @@ async def get_rda_hourly_data(
     - srqty: 일사량 (MJ/m²)
     """
 
-    df = pd.read_csv("frontend/public/region_files/rda_region_info.csv")
+    df = pd.read_csv(_RDA_REGION_CSV)
 
     # obsr_spot_nm 추출
     obsr_spot_nm = None
