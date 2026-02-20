@@ -5,20 +5,19 @@
 - 외부 공공데이터 API를 호출하여 데이터를 가져옴
 """
 
-import os
 import httpx
 import csv
 import io
 import xml.etree.ElementTree as ET
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Optional, List
 
-import pandas as pd
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
-# 경로 설정
-_RDA_REGION_CSV = os.path.join("..", "..", "..", "..","frontend", "public", "region_files", "rda_region_info.csv")
+from ..database import get_db
+from ..models.rda import WeatherDataDaily
 
 # ============================================================
 # KMA 시간별 데이터 API
@@ -336,7 +335,8 @@ async def get_rda_hourly_data(
     stn_code: str,
     start_date: str,
     end_date: str,
-    format: Optional[str] = Query(default="json", description="응답 형식 (json 또는 csv)")
+    format: Optional[str] = Query(default="json", description="응답 형식 (json 또는 csv)"),
+    db: Session = Depends(get_db)
 ):
     """
     국립농업과학원 RDA 시간별 기상 데이터를 조회합니다.
@@ -359,18 +359,15 @@ async def get_rda_hourly_data(
     - srqty: 일사량 (MJ/m²)
     """
 
-    df = pd.read_csv(_RDA_REGION_CSV)
+    # DB에서 관측소 정보 조회
+    station = db.query(WeatherDataDaily).filter(
+        WeatherDataDaily.stn_cd == stn_code
+    ).first()
 
-    # obsr_spot_nm 추출
-    obsr_spot_nm = None
-    for _, row in df.iterrows():
-        if row["지점코드"] == stn_code:
-            obsr_spot_nm = row["지점명"]
-            break
-
-    if not obsr_spot_nm:
+    if not station:
         raise HTTPException(status_code=400, detail=f"유효하지 않은 관측지점코드: {stn_code}")
 
+    obsr_spot_nm = station.stn_name
 
     # 날짜 형식 검증
     try:
@@ -387,7 +384,6 @@ async def get_rda_hourly_data(
         raise HTTPException(status_code=400, detail="조회 기간은 최대 7일까지 가능합니다.")
 
     # 날짜별로 데이터 수집
-    from datetime import timedelta
     all_data = []
     current_dt = start_dt
 
