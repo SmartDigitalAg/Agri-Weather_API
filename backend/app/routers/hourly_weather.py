@@ -18,8 +18,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 # 경로 설정
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_RDA_REGION_CSV = os.path.join(_BASE_DIR, "..", "..", "..", "frontend", "public", "region_files", "rda_region_info.csv")
+_RDA_REGION_CSV = os.path.join("..", "..", "..", "..","frontend", "public", "region_files", "rda_region_info.csv")
 
 # ============================================================
 # KMA 시간별 데이터 API
