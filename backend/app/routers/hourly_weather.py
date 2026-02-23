@@ -161,10 +161,6 @@ async def get_kma_hourly_data(
     if start_dt > end_dt:
         raise HTTPException(status_code=400, detail="시작 날짜가 종료 날짜보다 늦을 수 없습니다.")
 
-    # 최대 조회 기간 제한 (31일)
-    if (end_dt - start_dt).days > 31:
-        raise HTTPException(status_code=400, detail="조회 기간은 최대 31일까지 가능합니다.")
-
     data = await fetch_kma_hourly_data(stn_id, start_date, end_date)
 
     if not data:
@@ -307,11 +303,21 @@ async def fetch_rda_hourly_data(stn_code: str, obs_date: str, obsr_spot_nm: str)
             # 필요한 필드만 추출
             parsed_data = []
             for item in items:
+                # date 필드에서 날짜와 시간 분리 (예: "2026-02-20 00:00" -> date: "2026-02-20", time: "00:00")
+                raw_date = item.get("obsr_date") or item.get("date") or ""
+                raw_time = item.get("obsr_time") or item.get("time") or ""
+
+                # 날짜에 시간이 포함되어 있으면 분리
+                if " " in raw_date and not raw_time:
+                    date_parts = raw_date.split(" ", 1)
+                    raw_date = date_parts[0]
+                    raw_time = date_parts[1] if len(date_parts) > 1 else ""
+
                 record = {
                     "stn_Cd": item.get("obsr_spot_code") or item.get("stn_Cd"),
                     "stn_Name": item.get("obsr_spot_nm") or item.get("stn_Name"),
-                    "date": item.get("obsr_date") or item.get("date"),
-                    "time": item.get("obsr_time") or item.get("time"),
+                    "date": raw_date,
+                    "time": raw_time,
                     "temp": item.get("temp"),
                     "hum": item.get("hum"),
                     "widdir": item.get("widdir"),
@@ -379,10 +385,6 @@ async def get_rda_hourly_data(
 
     if start_dt > end_dt:
         raise HTTPException(status_code=400, detail="시작 날짜가 종료 날짜보다 늦을 수 없습니다.")
-
-    # 최대 조회 기간 제한 (7일)
-    if (end_dt - start_dt).days > 7:
-        raise HTTPException(status_code=400, detail="조회 기간은 최대 7일까지 가능합니다.")
 
     # 날짜별로 데이터 수집
     all_data = []

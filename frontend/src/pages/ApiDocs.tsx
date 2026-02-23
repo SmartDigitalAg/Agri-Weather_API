@@ -194,7 +194,7 @@ const DownloadCard = styled.div`
   margin-bottom: 16px;
 `;
 
-type TabType = 'current' | 'past' | 'forecast';
+type TabType = 'current' | 'past' | 'forecast' | 'aws';
 
 const ApiDocs: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('current');
@@ -218,11 +218,15 @@ const ApiDocs: React.FC = () => {
         <Tab $active={activeTab === 'forecast'} onClick={() => setActiveTab('forecast')}>
           기상예보
         </Tab>
+        <Tab $active={activeTab === 'aws'} onClick={() => setActiveTab('aws')}>
+          AWS(기상대)
+        </Tab>
       </TabContainer>
 
       {activeTab === 'current' && <CurrentWeatherDocs />}
       {activeTab === 'past' && <PastWeatherDocs />}
       {activeTab === 'forecast' && <ForecastDocs />}
+      {activeTab === 'aws' && <AwsDocs />}
     </Container>
   );
 };
@@ -493,6 +497,51 @@ const PastWeatherDocs: React.FC = () => (
 ]`}</CodeBlock>
       </ApiCard>
 
+      {/* 2. 지역별 특정기간 과거기상 조회 (시간별) */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 지역별 특정기간 과거기상 조회 (시간별)</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/kma/asos/hr/{'{지점번호}'}/{'{시작일자}'}/{'{종료일자}'}</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <Table>
+          <thead>
+            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>지점번호</code></td><td>integer</td><td>필수 (경로)</td><td>관측소 지점번호 (예: 108)</td></tr>
+            <tr><td><code>시작일자</code></td><td>string</td><td>필수 (경로)</td><td>조회 시작일 (YYYYMMDD 형식, 예: 20240101)</td></tr>
+            <tr><td><code>종료일자</code></td><td>string</td><td>필수 (경로)</td><td>조회 종료일 (YYYYMMDD 형식, 예: 20240131)</td></tr>
+            <tr><td><code>format</code></td><td>string</td><td>선택 (쿼리)</td><td>응답 형식 (json 또는 csv, 기본값: json)</td></tr>
+          </tbody>
+        </Table>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "stn_id": 108,
+  "start_date": "20240101",
+  "end_date": "20240101",
+  "total": 24,
+  "data": [
+    {
+      "tm": "2024-01-01 01:00",   // 관측시간
+      "stnId": "108",             // 지점번호
+      "stnNm": "서울",            // 지점명
+      "ta": "2.3",                // 기온 (°C)
+      "rn": "0.0",                // 강수량 (mm)
+      "ws": "1.5",                // 풍속 (m/s)
+      "wd": "180",                // 풍향 (°)
+      "hm": "55",                 // 습도 (%)
+      "icsr": "0.0"               // 일사량 (MJ/m²)
+    },
+    ...
+  ]
+}`}</CodeBlock>
+
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 매시간 (1시간 간격)
+        </UpdateFrequency>
+      </ApiCard>
+
       {/* 3. 지역 정보 CSV 다운로드 */}
       <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
@@ -507,9 +556,20 @@ const PastWeatherDocs: React.FC = () => (
       {/* 4. 원본데이터 명세서 다운로드 */}
       <DownloadCard>
         <SubTitle>원본데이터 명세서</SubTitle>
-        <DownloadLink href="/info_files/ASOS_KMA_info_day.docx" download>
-          ASOS_KMA_info_day.docx 다운로드
-        </DownloadLink>
+        <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
+          <div>
+            <DownloadLink href="/info_files/ASOS_KMA_info_day.docx" download>
+              ASOS_KMA_info_day.docx 다운로드
+            </DownloadLink>
+            <span style={{fontSize: '13px', color: '#666', marginLeft: '8px'}}>- 일별 데이터</span>
+          </div>
+          <div>
+            <DownloadLink href="/info_files/ASOS_KMA_info_hour.docx" download>
+              ASOS_KMA_info_hour.docx 다운로드
+            </DownloadLink>
+            <span style={{fontSize: '13px', color: '#666', marginLeft: '8px'}}>- 시간별 데이터</span>
+          </div>
+        </div>
       </DownloadCard>
     </Section>
 
@@ -563,7 +623,53 @@ const PastWeatherDocs: React.FC = () => (
         </UpdateFrequency>
       </ApiCard>
 
-      {/* 2. 지역 코드 및 관측 시작/마지막 일자 조회 */}
+      {/* 2. 지역별 특정기간 과거기상 조회 (시간별) */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 지역별 특정기간 과거기상 조회 (시간별)</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/rda/weather/hr/{'{지점코드}'}/{'{시작일자}'}/{'{종료일자}'}</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <Table>
+          <thead>
+            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>지점코드</code></td><td>string</td><td>필수 (경로)</td><td>관측소 지점코드 (예: 477802A001)</td></tr>
+            <tr><td><code>시작일자</code></td><td>string</td><td>필수 (경로)</td><td>조회 시작일 (YYYYMMDD 형식, 예: 20240101)</td></tr>
+            <tr><td><code>종료일자</code></td><td>string</td><td>필수 (경로)</td><td>조회 종료일 (YYYYMMDD 형식, 예: 20240131)</td></tr>
+            <tr><td><code>format</code></td><td>string</td><td>선택 (쿼리)</td><td>응답 형식 (json 또는 csv, 기본값: json)</td></tr>
+          </tbody>
+        </Table>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "stn_code": "477802A001",
+  "start_date": "20240101",
+  "end_date": "20240101",
+  "total": 24,
+  "data": [
+    {
+      "stn_Cd": "477802A001",     // 관측지점코드
+      "stn_Name": "가평군 가평읍", // 관측지점명
+      "date": "2024-01-01",       // 관측일자
+      "time": "01:00",            // 관측시간
+      "temp": "2.3",              // 기온 (°C)
+      "hum": "55",                // 습도 (%)
+      "widdir": "180",            // 풍향 (°)
+      "wind": "1.5",              // 풍속 (m/s)
+      "rn": "0.0",                // 강수량 (mm)
+      "srqty": "0.0"              // 일사량 (MJ/m²)
+    },
+    ...
+  ]
+}`}</CodeBlock>
+
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 매시간 (1시간 간격)
+        </UpdateFrequency>
+      </ApiCard>
+
+      {/* 3. 지역 코드 및 관측 시작/마지막 일자 조회 */}
       <ApiCard>
         <ApiTitle><Method>GET</Method> 조회 할 수 있는 지역 코드 및 관측 시작일자, 마지막 관측일자 조회</ApiTitle>
         <Endpoint>{API_BASE_URL}/api/rda/day/region</Endpoint>
@@ -589,7 +695,7 @@ const PastWeatherDocs: React.FC = () => (
 ]`}</CodeBlock>
       </ApiCard>
 
-      {/* 3. 지역 정보 CSV 다운로드 */}
+      {/* 4. 지역 정보 CSV 다운로드 */}
       <DownloadCard>
         <SubTitle>지역 정보 파일</SubTitle>
         <DownloadLink href="/region_files/rda_region_info.csv" download>
@@ -770,6 +876,134 @@ const ForecastDocs: React.FC = () => (
           </div>
         </div>
       </DownloadCard>
+    </Section>
+  </>
+);
+
+// ===== AWS (기상대) =====
+const AwsDocs: React.FC = () => (
+  <>
+    <Section>
+      <SectionTitle>AWS 기상대</SectionTitle>
+
+      {/* 1. 기상대 목록 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> AWS 기상대 목록 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/aws/stations</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <InfoBox>파라미터 없음</InfoBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`[
+  {
+    "id": "01",
+    "name": "전주시",
+    "lat": 35.8242,
+    "lng": 127.1480
+  },
+  ...
+]`}</CodeBlock>
+      </ApiCard>
+
+      {/* 2. 최신 기상 데이터 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 최신 AWS 기상 데이터 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/aws/{'{기상대ID}'}/latest</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <Table>
+          <thead>
+            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>기상대ID</code></td><td>string</td><td>필수 (경로)</td><td>기상대 ID (예: 01)</td></tr>
+          </tbody>
+        </Table>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "station_id": "01",
+  "station_name": "전주시",
+  "data": {
+    "Timestamp": "14:30",      // 측정시간
+    "Temp": 15.2,              // 온도 (°C)
+    "Humid": 55.0,             // 습도 (%)
+    "Radn": 450.5,             // 순간광량 (W/m²)
+    "Wind_degree": 180.0,      // 풍향 (°)
+    "Wind": 2.3,               // 풍속 (m/s)
+    "Rainfall": 0.0            // 강수량 (mm)
+  }
+}`}</CodeBlock>
+
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 실시간 (약 10분 간격)
+        </UpdateFrequency>
+      </ApiCard>
+
+      {/* 3. 기간별 기상 데이터 조회 */}
+      <ApiCard>
+        <ApiTitle><Method>GET</Method> 기간별 AWS 기상 데이터 조회</ApiTitle>
+        <Endpoint>{API_BASE_URL}/api/aws/{'{기상대ID}'}/{'{시작일자}'}/{'{종료일자}'}</Endpoint>
+
+        <SubTitle>요청 파라미터</SubTitle>
+        <Table>
+          <thead>
+            <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>기상대ID</code></td><td>string</td><td>필수 (경로)</td><td>기상대 ID (예: 01)</td></tr>
+            <tr><td><code>시작일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 시작일 (YYYY-MM-DD 형식, 예: 2024-01-01)</td></tr>
+            <tr><td><code>종료일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 종료일 (YYYY-MM-DD 형식, 예: 2024-01-31)</td></tr>
+            <tr><td><code>format</code></td><td>string</td><td>선택 (쿼리)</td><td>응답 형식 (json 또는 csv, 기본값: json)</td></tr>
+          </tbody>
+        </Table>
+
+        <WarnBox>
+          <strong>* 참고:</strong> 최대 조회 기간은 <strong>365일</strong>까지 가능합니다.
+        </WarnBox>
+
+        <SubTitle>응답 메시지 예시</SubTitle>
+        <CodeBlock>{`{
+  "station_id": "01",
+  "station_name": "전주시",
+  "start_date": "2024-01-01",
+  "end_date": "2024-01-02",
+  "total": 288,
+  "data": [
+    {
+      "Date": "2024-01-01",      // 날짜
+      "Timestamp": "00:10",      // 측정시간
+      "Temp": 2.3,               // 온도 (°C)
+      "Humid": 65.0,             // 습도 (%)
+      "Radn": 0.0,               // 순간광량 (W/m²)
+      "Wind_degree": 270.0,      // 풍향 (°)
+      "Wind": 1.2,               // 풍속 (m/s)
+      "Rainfall": 0.0            // 강수량 (mm)
+    },
+    {
+      "Date": "2024-01-01",
+      "Timestamp": "00:20",
+      "Temp": 2.1,
+      "Humid": 66.0,
+      "Radn": 0.0,
+      "Wind_degree": 265.0,
+      "Wind": 1.0,
+      "Rainfall": 0.0
+    },
+    ...
+  ]
+}`}</CodeBlock>
+
+        <UpdateFrequency>
+          <strong>데이터 업데이트 주기:</strong> 약 10분 간격
+        </UpdateFrequency>
+      </ApiCard>
+
+      <InfoBox>
+        <strong>참고:</strong> AWS 기상대 데이터는 외부 기상대 시스템에서 실시간으로 수집됩니다.
+        데이터 제공 시간이나 가용성은 외부 시스템 상태에 따라 달라질 수 있습니다.
+      </InfoBox>
     </Section>
   </>
 );

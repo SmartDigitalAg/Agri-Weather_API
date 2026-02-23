@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import PastWeatherMap from '../components/PastWeatherMap';
+import NullDataMap from '../components/NullDataMap';
 
 const API_BASE_URL = 'http://3.35.171.253:8001';
 
@@ -257,6 +258,7 @@ const PastWeather = () => {
   const [showHourlyResults, setShowHourlyResults] = useState<boolean>(false);
   const [hourlyLoading, setHourlyLoading] = useState<boolean>(false);
   const [hourlyError, setHourlyError] = useState<string | null>(null);
+  const [hourlyProgress, setHourlyProgress] = useState<number>(0); // 진행률 (0-100)
 
   // 시간별 조회용 날짜 (YYYYMMDD 형식)
   const [hourlyStartDate, setHourlyStartDate] = useState<string>('');
@@ -522,6 +524,31 @@ const PastWeather = () => {
     }
   };
 
+  // 날짜 범위 생성 함수 (YYYYMMDD 형식)
+  const getDateRange = (startStr: string, endStr: string): string[] => {
+    const dates: string[] = [];
+    const start = new Date(
+      parseInt(startStr.substring(0, 4)),
+      parseInt(startStr.substring(4, 6)) - 1,
+      parseInt(startStr.substring(6, 8))
+    );
+    const end = new Date(
+      parseInt(endStr.substring(0, 4)),
+      parseInt(endStr.substring(4, 6)) - 1,
+      parseInt(endStr.substring(6, 8))
+    );
+
+    const current = new Date(start);
+    while (current <= end) {
+      const year = current.getFullYear();
+      const month = String(current.getMonth() + 1).padStart(2, '0');
+      const day = String(current.getDate()).padStart(2, '0');
+      dates.push(`${year}${month}${day}`);
+      current.setDate(current.getDate() + 1);
+    }
+    return dates;
+  };
+
   // 시간별 데이터 조회
   const handleHourlyQuery = async () => {
     if (!hourlyStartDate || !hourlyEndDate) {
@@ -537,42 +564,86 @@ const PastWeather = () => {
 
     setHourlyLoading(true);
     setHourlyError(null);
+    setHourlyProgress(0);
+    setHourlyResults([]);
+    setShowHourlyResults(false);
 
     try {
       if (institution === 'RDA' && selectedRdaStation) {
-        // RDA 시간별 데이터 조회
-        const response = await fetch(
-          `${API_BASE_URL}/api/rda/weather/hr/${selectedRdaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setHourlyResults(data.data || []);
-          setHourlyTotalCount(data.total || 0);
-          setShowHourlyResults(true);
-        } else {
-          const errorData = await response.json();
-          setHourlyError(errorData.detail || '데이터 조회 실패');
+        // RDA: 날짜별로 개별 호출하여 진행률 표시
+        const dates = getDateRange(hourlyStartDate, hourlyEndDate);
+        const totalDays = dates.length;
+        const allData: RdaHourlyData[] = [];
+
+        for (let i = 0; i < dates.length; i++) {
+          const dateStr = dates[i];
+          try {
+            const response = await fetch(
+              `${API_BASE_URL}/api/rda/weather/hr/${selectedRdaStation}/${dateStr}/${dateStr}?format=json`
+            );
+            if (response.ok) {
+              const data = await response.json();
+              if (data.data && data.data.length > 0) {
+                allData.push(...data.data);
+              }
+            }
+          } catch (err) {
+            console.error(`날짜 ${dateStr} 조회 실패:`, err);
+          }
+          // 진행률 업데이트
+          setHourlyProgress(Math.round(((i + 1) / totalDays) * 100));
         }
+
+        setHourlyResults(allData);
+        setHourlyTotalCount(allData.length);
+        setShowHourlyResults(true);
+
       } else if (institution === 'KMA' && selectedKmaStation) {
-        // KMA 시간별 데이터 조회
-        const response = await fetch(
-          `${API_BASE_URL}/api/kma/asos/hr/${selectedKmaStation}/${hourlyStartDate}/${hourlyEndDate}?format=json`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setHourlyResults(data.data || []);
-          setHourlyTotalCount(data.total || 0);
-          setShowHourlyResults(true);
-        } else {
-          const errorData = await response.json();
-          setHourlyError(errorData.detail || '데이터 조회 실패');
+        // KMA: 31일 단위로 나눠서 호출
+        const dates = getDateRange(hourlyStartDate, hourlyEndDate);
+        const totalDays = dates.length;
+        const allData: KmaHourlyData[] = [];
+
+        // 31일 단위로 청크 분할
+        const chunkSize = 31;
+        const chunks: { start: string; end: string }[] = [];
+        for (let i = 0; i < dates.length; i += chunkSize) {
+          const chunkDates = dates.slice(i, i + chunkSize);
+          chunks.push({
+            start: chunkDates[0],
+            end: chunkDates[chunkDates.length - 1]
+          });
         }
+
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          try {
+            const response = await fetch(
+              `${API_BASE_URL}/api/kma/asos/hr/${selectedKmaStation}/${chunk.start}/${chunk.end}?format=json`
+            );
+            if (response.ok) {
+              const data = await response.json();
+              if (data.data && data.data.length > 0) {
+                allData.push(...data.data);
+              }
+            }
+          } catch (err) {
+            console.error(`기간 ${chunk.start}~${chunk.end} 조회 실패:`, err);
+          }
+          // 진행률 업데이트
+          setHourlyProgress(Math.round(((i + 1) / chunks.length) * 100));
+        }
+
+        setHourlyResults(allData);
+        setHourlyTotalCount(allData.length);
+        setShowHourlyResults(true);
       }
     } catch (err) {
       console.error('시간별 데이터 조회 실패:', err);
       setHourlyError('데이터 조회 중 오류가 발생했습니다.');
     } finally {
       setHourlyLoading(false);
+      setHourlyProgress(100);
     }
   };
 
@@ -722,6 +793,9 @@ const PastWeather = () => {
 
   // 지도 연도 슬라이더 상태
   const [mapYear, setMapYear] = useState<number>(2024);
+
+  // NULL 데이터 지도 모달 상태
+  const [showNullDataMap, setShowNullDataMap] = useState<boolean>(false);
 
   // RDA 데이터를 CSV 문자열로 변환
   const convertRdaDataToCsv = (data: RdaDailyData[]): string => {
@@ -937,6 +1011,21 @@ const PastWeather = () => {
   const canQuery = institution === 'RDA'
     ? selectedRdaStation && startYear && startMonth && startDay && endYear && endMonth && endDay
     : selectedKmaStation && startYear && startMonth && startDay && endYear && endMonth && endDay;
+
+  // RDA 시간별 데이터의 날짜/시간 파싱 (date에 시간이 포함되어 있을 수 있음)
+  const parseRdaDateTime = (date: string | undefined, time: string | undefined) => {
+    let dateStr = date || '';
+    let timeStr = time || '';
+
+    // date에 시간이 포함되어 있고 time이 비어있으면 분리
+    if (dateStr.includes(' ') && !timeStr) {
+      const parts = dateStr.split(' ');
+      dateStr = parts[0];
+      timeStr = parts[1] || '';
+    }
+
+    return { date: dateStr, time: timeStr };
+  };
 
   // 지도에서 위치 선택 시 핸들러
   const handleMapLocationSelect = (
@@ -1209,12 +1298,30 @@ const PastWeather = () => {
               disabled={!canHourlyQuery || hourlyLoading}
               className="ml-4 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              {hourlyLoading ? '조회 중...' : '조회'}
+              {hourlyLoading ? `조회 중... ${hourlyProgress}%` : '조회'}
             </button>
           </div>
 
+          {/* 진행률 바 */}
+          {hourlyLoading && (
+            <div className="mt-3">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-gray-200 rounded-full h-2.5">
+                  <div
+                    className="bg-green-600 h-2.5 rounded-full transition-all duration-300"
+                    style={{ width: `${hourlyProgress}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-medium text-gray-700 min-w-[50px]">{hourlyProgress}%</span>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                데이터를 불러오는 중입니다. 기간이 길수록 시간이 오래 걸릴 수 있습니다.
+              </p>
+            </div>
+          )}
+
           <p className="mt-2 text-xs text-gray-500">
-            * KMA: 최대 31일, RDA: 최대 7일까지 조회 가능
+            * 기간 제한 없이 조회 가능합니다. 긴 기간 조회 시 시간이 다소 걸릴 수 있습니다.
           </p>
 
           {/* 에러 메시지 */}
@@ -1226,7 +1333,20 @@ const PastWeather = () => {
         </div>
 
         {/* Map Section */}
-        <PastWeatherMap
+        <div className="flex flex-col">
+          {/* NULL 데이터 지도 버튼 */}
+          <div className="mb-2 flex justify-end">
+            <button
+              onClick={() => setShowNullDataMap(true)}
+              className="px-3 py-1.5 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              NULL 데이터 현황
+            </button>
+          </div>
+          <PastWeatherMap
           rdaStations={rdaStations}
           kmaStations={kmaStations}
           selectedYear={mapYear}
@@ -1235,7 +1355,13 @@ const PastWeather = () => {
           selectedRdaStation={selectedRdaStation}
           selectedKmaStation={selectedKmaStation}
         />
+        </div>
       </div>
+
+      {/* NULL 데이터 지도 모달 */}
+      {showNullDataMap && (
+        <NullDataMap onClose={() => setShowNullDataMap(false)} />
+      )}
 
       {/* Results Section - 일별 자료 */}
       {dataType === 'daily' && showResults && (
@@ -1475,20 +1601,23 @@ const PastWeather = () => {
                     </tr>
                   ))
                 ) : (
-                  (hourlyResults as RdaHourlyData[]).slice(0, 50).map((row, index) => (
-                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
-                      <td className="px-4 py-3">{row.date}</td>
-                      <td className="px-4 py-3">{row.time}</td>
-                      <td className="px-4 py-3">{row.stn_Cd}</td>
-                      <td className="px-4 py-3">{row.stn_Name}</td>
-                      <td className="px-4 py-3 text-right">{row.temp ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.hum ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.widdir ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.wind ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.rn ?? '-'}</td>
-                      <td className="px-4 py-3 text-right">{row.srqty ?? '-'}</td>
-                    </tr>
-                  ))
+                  (hourlyResults as RdaHourlyData[]).slice(0, 50).map((row, index) => {
+                    const { date, time } = parseRdaDateTime(row.date, row.time);
+                    return (
+                      <tr key={index} className="border-b border-gray-200 hover:bg-gray-50">
+                        <td className="px-4 py-3">{date}</td>
+                        <td className="px-4 py-3">{time}</td>
+                        <td className="px-4 py-3">{row.stn_Cd}</td>
+                        <td className="px-4 py-3">{row.stn_Name}</td>
+                        <td className="px-4 py-3 text-right">{row.temp ?? '-'}</td>
+                        <td className="px-4 py-3 text-right">{row.hum ?? '-'}</td>
+                        <td className="px-4 py-3 text-right">{row.widdir ?? '-'}</td>
+                        <td className="px-4 py-3 text-right">{row.wind ?? '-'}</td>
+                        <td className="px-4 py-3 text-right">{row.rn ?? '-'}</td>
+                        <td className="px-4 py-3 text-right">{row.srqty ?? '-'}</td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

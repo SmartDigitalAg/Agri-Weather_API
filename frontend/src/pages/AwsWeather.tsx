@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import * as d3 from 'd3-geo';
 import * as XLSX from 'xlsx';
 import geoData from '../components/MapVisualization/SIDO_MAP_2022.json';
@@ -227,11 +227,20 @@ const AwsWeather = () => {
   // 지도 설정
   const mapWidth = 400;
   const mapHeight = 460;
-  const projection = d3.geoMercator()
-    .center([127.5, 36.0])
-    .scale(4500)
-    .translate([mapWidth / 2, mapHeight / 2]);
-  const pathGenerator = d3.geoPath().projection(projection);
+
+  const projection = useMemo(() => {
+    return d3.geoMercator()
+      .center([127.5, 36.0])
+      .scale(4500)
+      .translate([mapWidth / 2, mapHeight / 2]);
+  }, []);
+
+  const pathGenerator = useMemo(() => {
+    return d3.geoPath().projection(projection);
+  }, [projection]);
+
+  // 타입 캐스팅
+  const koreaGeoData = geoData as GeoData;
 
   // 선택된 기상대 정보
   const selectedStationInfo = stations.find(s => s.id === selectedStation);
@@ -405,23 +414,54 @@ const AwsWeather = () => {
             <svg
               width={mapWidth}
               height={mapHeight}
-              className="bg-blue-50 rounded-lg"
+              className="rounded-lg"
             >
-              {/* 지도 배경 */}
-              <g>
-                {(geoData as GeoData).features.map((feature, idx) => {
-                  const path = pathGenerator(feature.geometry as d3.GeoPermissibleObjects);
-                  return (
-                    <path
-                      key={idx}
-                      d={path || ''}
-                      fill="#f3f4f6"
-                      stroke="#d1d5db"
-                      strokeWidth={0.5}
-                    />
-                  );
-                })}
-              </g>
+              {/* Background sea */}
+              <rect x="0" y="0" width={mapWidth} height={mapHeight} fill="#bae6fd" />
+
+              {/* Province fills */}
+              {koreaGeoData.features.map((feature, index) => {
+                const geometry = {
+                  type: feature.geometry.type,
+                  coordinates: feature.geometry.coordinates
+                };
+                const path = pathGenerator(geometry as d3.GeoPermissibleObjects);
+
+                if (!path) return null;
+
+                return (
+                  <path
+                    key={`fill-${feature.properties.CTPRVN_CD || index}`}
+                    d={path}
+                    fill="#d1fae5"
+                    stroke="none"
+                  />
+                );
+              })}
+
+              {/* Province strokes */}
+              {koreaGeoData.features.map((feature, index) => {
+                const geometry = {
+                  type: feature.geometry.type,
+                  coordinates: feature.geometry.coordinates
+                };
+                const path = pathGenerator(geometry as d3.GeoPermissibleObjects);
+
+                if (!path) return null;
+
+                return (
+                  <path
+                    key={`stroke-${feature.properties.CTPRVN_CD || index}`}
+                    d={path}
+                    fill="none"
+                    stroke="#065f46"
+                    strokeWidth={1.5}
+                    strokeLinejoin="round"
+                    vectorEffect="non-scaling-stroke"
+                    pointerEvents="none"
+                  />
+                );
+              })}
 
               {/* 기상대 마커 */}
               {stations.map(station => {

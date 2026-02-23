@@ -4,11 +4,11 @@
 - 기상 데이터 통계 조회 엔드포인트
 """
 
-from typing import Optional
+from typing import Optional, List
 from datetime import date
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, case, and_
 
 from ..database import get_db
 from ..models.kma import AsosDailyData
@@ -230,4 +230,167 @@ def get_comparison_stats(
             "end_date": end_date
         },
         "stations": results
+    }
+
+
+@router.get("/null-status/rda", summary="RDA 관측소별 NULL 데이터 현황")
+def get_rda_null_status(db: Session = Depends(get_db)):
+    """
+    RDA 관측소별 NULL 데이터 현황을 조회합니다.
+    각 관측소별로 어떤 필드에 NULL이 많은지 확인합니다.
+
+    - 일사량(srqty)만 NULL: 빨간색
+    - 다른 필드가 NULL: 노란색
+    - 2개 이상 NULL: 주황색
+    """
+    # 주요 필드들
+    fields = ['temp', 'hghst_artmp', 'lowst_artmp', 'hum', 'wind', 'rn', 'srqty', 'sun_time']
+
+    # 관측소별 통계 조회
+    results = db.query(
+        WeatherDataDaily.stn_cd,
+        WeatherDataDaily.stn_name,
+        func.count(WeatherDataDaily.id).label('total_count'),
+        func.sum(case((WeatherDataDaily.temp == None, 1), else_=0)).label('temp_null'),
+        func.sum(case((WeatherDataDaily.hghst_artmp == None, 1), else_=0)).label('hghst_artmp_null'),
+        func.sum(case((WeatherDataDaily.lowst_artmp == None, 1), else_=0)).label('lowst_artmp_null'),
+        func.sum(case((WeatherDataDaily.hum == None, 1), else_=0)).label('hum_null'),
+        func.sum(case((WeatherDataDaily.wind == None, 1), else_=0)).label('wind_null'),
+        func.sum(case((WeatherDataDaily.rn == None, 1), else_=0)).label('rn_null'),
+        func.sum(case((WeatherDataDaily.srqty == None, 1), else_=0)).label('srqty_null'),
+        func.sum(case((WeatherDataDaily.sun_time == None, 1), else_=0)).label('sun_time_null'),
+    ).group_by(
+        WeatherDataDaily.stn_cd,
+        WeatherDataDaily.stn_name
+    ).all()
+
+    stations = []
+    for row in results:
+        total = row.total_count or 1
+
+        # NULL 비율 계산 (50% 이상이면 해당 필드가 NULL인 것으로 판단)
+        null_fields = []
+        null_threshold = 0.5  # 50% 이상 NULL이면 해당 필드 없음으로 판단
+
+        field_null_info = {
+            'temp': {'count': row.temp_null or 0, 'label': '기온'},
+            'hghst_artmp': {'count': row.hghst_artmp_null or 0, 'label': '최고기온'},
+            'lowst_artmp': {'count': row.lowst_artmp_null or 0, 'label': '최저기온'},
+            'hum': {'count': row.hum_null or 0, 'label': '습도'},
+            'wind': {'count': row.wind_null or 0, 'label': '풍속'},
+            'rn': {'count': row.rn_null or 0, 'label': '강수량'},
+            'srqty': {'count': row.srqty_null or 0, 'label': '일사량'},
+            'sun_time': {'count': row.sun_time_null or 0, 'label': '일조시간'},
+        }
+
+        for field, info in field_null_info.items():
+            if info['count'] / total >= null_threshold:
+                null_fields.append({
+                    'field': field,
+                    'label': info['label'],
+                    'null_ratio': round(info['count'] / total * 100, 1)
+                })
+
+        # 색상 결정
+        srqty_only_null = len(null_fields) == 1 and null_fields[0]['field'] == 'srqty'
+        has_srqty_null = any(f['field'] == 'srqty' for f in null_fields)
+        other_null_count = len([f for f in null_fields if f['field'] != 'srqty'])
+
+        if srqty_only_null:
+            color = 'red'  # 일사량만 NULL
+        elif len(null_fields) >= 2:
+            color = 'orange'  # 2개 이상 NULL
+        elif len(null_fields) == 1:
+            color = 'yellow'  # 다른 값 1개 NULL
+        else:
+            color = 'green'  # 모든 데이터 정상
+
+        stations.append({
+            'stn_cd': row.stn_cd,
+            'stn_name': row.stn_name,
+            'total_count': total,
+            'null_fields': null_fields,
+            'color': color
+        })
+
+    return {
+        'institution': 'RDA',
+        'total_stations': len(stations),
+        'stations': stations
+    }
+
+
+@router.get("/null-status/kma", summary="KMA 관측소별 NULL 데이터 현황")
+def get_kma_null_status(db: Session = Depends(get_db)):
+    """
+    KMA ASOS 관측소별 NULL 데이터 현황을 조회합니다.
+    """
+    # 관측소별 통계 조회
+    results = db.query(
+        AsosDailyData.stn_id,
+        AsosDailyData.stn_nm,
+        func.count(AsosDailyData.id).label('total_count'),
+        func.sum(case((AsosDailyData.avg_ta == None, 1), else_=0)).label('avg_ta_null'),
+        func.sum(case((AsosDailyData.min_ta == None, 1), else_=0)).label('min_ta_null'),
+        func.sum(case((AsosDailyData.max_ta == None, 1), else_=0)).label('max_ta_null'),
+        func.sum(case((AsosDailyData.sum_rn == None, 1), else_=0)).label('sum_rn_null'),
+        func.sum(case((AsosDailyData.avg_ws == None, 1), else_=0)).label('avg_ws_null'),
+        func.sum(case((AsosDailyData.avg_rhm == None, 1), else_=0)).label('avg_rhm_null'),
+        func.sum(case((AsosDailyData.sum_ss_hr == None, 1), else_=0)).label('sum_ss_hr_null'),
+        func.sum(case((AsosDailyData.sum_gsr == None, 1), else_=0)).label('sum_gsr_null'),
+    ).group_by(
+        AsosDailyData.stn_id,
+        AsosDailyData.stn_nm
+    ).all()
+
+    stations = []
+    for row in results:
+        total = row.total_count or 1
+
+        null_fields = []
+        null_threshold = 0.5
+
+        field_null_info = {
+            'avg_ta': {'count': row.avg_ta_null or 0, 'label': '평균기온'},
+            'min_ta': {'count': row.min_ta_null or 0, 'label': '최저기온'},
+            'max_ta': {'count': row.max_ta_null or 0, 'label': '최고기온'},
+            'sum_rn': {'count': row.sum_rn_null or 0, 'label': '강수량'},
+            'avg_ws': {'count': row.avg_ws_null or 0, 'label': '풍속'},
+            'avg_rhm': {'count': row.avg_rhm_null or 0, 'label': '습도'},
+            'sum_ss_hr': {'count': row.sum_ss_hr_null or 0, 'label': '일조시간'},
+            'sum_gsr': {'count': row.sum_gsr_null or 0, 'label': '일사량'},
+        }
+
+        for field, info in field_null_info.items():
+            if info['count'] / total >= null_threshold:
+                null_fields.append({
+                    'field': field,
+                    'label': info['label'],
+                    'null_ratio': round(info['count'] / total * 100, 1)
+                })
+
+        # 색상 결정 (sum_gsr = 일사량)
+        srqty_only_null = len(null_fields) == 1 and null_fields[0]['field'] == 'sum_gsr'
+
+        if srqty_only_null:
+            color = 'red'
+        elif len(null_fields) >= 2:
+            color = 'orange'
+        elif len(null_fields) == 1:
+            color = 'yellow'
+        else:
+            color = 'green'
+
+        stations.append({
+            'stn_id': row.stn_id,
+            'stn_nm': row.stn_nm,
+            'total_count': total,
+            'null_fields': null_fields,
+            'color': color
+        })
+
+    return {
+        'institution': 'KMA',
+        'total_stations': len(stations),
+        'stations': stations
     }
