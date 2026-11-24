@@ -239,6 +239,37 @@ const AwsWeather = () => {
     return d3.geoPath().projection(projection);
   }, [projection]);
 
+  // 기상대 마커 위치: 원은 실제 위치에 그대로 그린다(가까운 기상대는 원이 겹침).
+  // 겹치는 기상대끼리는 이름만 원 아래에 한 줄씩 내려 적어 글자가 겹치지 않게 한다
+  const markerPositions = useMemo(() => {
+    const MERGE_PX = 20;   // 이 거리 안이면 겹치는 것으로 봄
+    const LINE_PX = 14;    // 이름 줄 간격
+    const points = stations
+      .map(s => ({ station: s, coords: projection([s.lng, s.lat]) }))
+      .filter((p): p is { station: AwsStation; coords: [number, number] } => p.coords !== null);
+
+    const groups: { station: AwsStation; coords: [number, number] }[][] = [];
+    points.forEach(p => {
+      const group = groups.find(g =>
+        Math.hypot(g[0].coords[0] - p.coords[0], g[0].coords[1] - p.coords[1]) < MERGE_PX
+      );
+      if (group) group.push(p);
+      else groups.push([p]);
+    });
+
+    return groups.flatMap(group => {
+      const labelX = group[0].coords[0];
+      const labelY = Math.max(...group.map(p => p.coords[1])) + 25;
+      return group.map((p, i) => ({
+        station: p.station,
+        x: p.coords[0],
+        y: p.coords[1],
+        labelX,
+        labelY: labelY + i * LINE_PX,
+      }));
+    });
+  }, [stations, projection]);
+
   // 타입 캐스팅
   const koreaGeoData = geoData as GeoData;
 
@@ -464,10 +495,10 @@ const AwsWeather = () => {
               })}
 
               {/* 기상대 마커 */}
-              {stations.map(station => {
-                const coords = projection([station.lng, station.lat]);
-                if (!coords) return null;
-                const [x, y] = coords;
+              {/* 선택된 기상대를 마지막에 그려 겹친 원 중 맨 위에 오게 함. 이름을 눌러도 선택됨 */}
+              {[...markerPositions]
+                .sort((a, b) => Number(a.station.id === selectedStation) - Number(b.station.id === selectedStation))
+                .map(({ station, x, y, labelX, labelY }) => {
                 const isSelected = station.id === selectedStation;
 
                 return (
@@ -500,12 +531,12 @@ const AwsWeather = () => {
                     />
                     {/* 레이블 */}
                     <text
-                      x={x}
-                      y={y + 25}
+                      x={labelX}
+                      y={labelY}
                       textAnchor="middle"
                       fontSize="11"
                       fontWeight="600"
-                      fill="#4b5563"
+                      fill={isSelected ? '#9333ea' : '#4b5563'}
                     >
                       {station.name}
                     </text>

@@ -898,11 +898,16 @@ const AwsDocs: React.FC = () => (
         <CodeBlock>{`[
   {
     "id": "01",
-    "name": "전주시",
-    "lat": 35.8242,
-    "lng": 127.1480
+    "name": "창조1관",
+    "lat": 35.847545992351,
+    "lng": 127.135510466536
   },
-  ...
+  {
+    "id": "02",
+    "name": "ICT(연구실)",
+    "lat": 35.8494806365174,
+    "lng": 127.130950731905
+  }
 ]`}</CodeBlock>
       </ApiCard>
 
@@ -917,14 +922,14 @@ const AwsDocs: React.FC = () => (
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>기상대ID</code></td><td>string</td><td>필수 (경로)</td><td>기상대 ID (예: 01)</td></tr>
+            <tr><td><code>기상대ID</code></td><td>string</td><td>필수 (경로)</td><td>기상대 ID (01: 창조1관, 02: ICT(연구실))</td></tr>
           </tbody>
         </Table>
 
         <SubTitle>응답 메시지 예시</SubTitle>
         <CodeBlock>{`{
   "station_id": "01",
-  "station_name": "전주시",
+  "station_name": "창조1관",
   "data": {
     "Timestamp": "14:30",      // 측정시간
     "Temp": 15.2,              // 온도 (°C)
@@ -952,7 +957,7 @@ const AwsDocs: React.FC = () => (
             <tr><th>파라미터</th><th>타입</th><th>필수</th><th>설명</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>기상대ID</code></td><td>string</td><td>필수 (경로)</td><td>기상대 ID (예: 01)</td></tr>
+            <tr><td><code>기상대ID</code></td><td>string</td><td>필수 (경로)</td><td>기상대 ID (01: 창조1관, 02: ICT(연구실))</td></tr>
             <tr><td><code>시작일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 시작일 (YYYY-MM-DD 형식, 예: 2024-01-01)</td></tr>
             <tr><td><code>종료일자</code></td><td>date</td><td>필수 (경로)</td><td>조회 종료일 (YYYY-MM-DD 형식, 예: 2024-01-31)</td></tr>
             <tr><td><code>format</code></td><td>string</td><td>선택 (쿼리)</td><td>응답 형식 (json 또는 csv, 기본값: json)</td></tr>
@@ -966,7 +971,7 @@ const AwsDocs: React.FC = () => (
         <SubTitle>응답 메시지 예시</SubTitle>
         <CodeBlock>{`{
   "station_id": "01",
-  "station_name": "전주시",
+  "station_name": "창조1관",
   "start_date": "2024-01-01",
   "end_date": "2024-01-02",
   "total": 288,

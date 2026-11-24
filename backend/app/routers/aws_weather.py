@@ -19,18 +19,29 @@ router = APIRouter(
 )
 
 # 기상대 정보 매핑
-# ID '01' -> Site=85, Dev=1 (전주시)
+# ID '01' -> Site=85, Dev=1 (창조1관, 구 학습도서관)
+# ID '02' -> Site=98, Dev=1 (ICT(연구실), 2026-10-16~)
+# 원본 열 순서가 기상대마다 달라서 columns(원본 열 번호 -> 항목)를 따로 둔다. 응답 형식은 같음
 AWS_STATIONS = {
     "01": {
         "site": 85,
         "dev": 1,
-        "name": "전주시",
-        "lat": 35.8242,
-        "lng": 127.1480
-    }
+        "name": "창조1관",
+        "lat": 35.847545992351,
+        "lng": 127.135510466536,
+        "columns": {1: "Temp", 2: "Humid", 6: "Radn", 7: "Wind_degree", 13: "Wind", 14: "Rainfall"},
+    },
+    "02": {
+        "site": 98,
+        "dev": 1,
+        "name": "ICT(연구실)",
+        "lat": 35.8494806365174,
+        "lng": 127.130950731905,
+        "columns": {1: "Temp", 2: "Humid", 3: "Radn", 4: "Wind_degree", 8: "Wind", 9: "Rainfall"},
+    },
 }
 
-# 데이터 컬럼 인덱스 매핑
+# 데이터 컬럼 인덱스 매핑 (01 창조1관 기준, 0번은 Timestamp)
 DATA_COLUMNS = {
     0: "Timestamp",
     1: "Temp",
@@ -40,6 +51,14 @@ DATA_COLUMNS = {
     13: "Wind",
     14: "Rainfall"
 }
+
+# site 번호 -> 열 매핑
+SITE_COLUMNS = {info["site"]: info["columns"] for info in AWS_STATIONS.values()}
+
+
+def _to_float(value: str) -> Optional[float]:
+    """빈 값은 None (기존 방식과 같음)"""
+    return float(value) if value else None
 
 BASE_URL = "http://203.239.47.148:8080/dspnet.aspx"
 
@@ -72,6 +91,9 @@ async def fetch_aws_data(site: int, dev: int, year: int, month: int, day: int) -
 
             lines = text_data.strip().split('\n')
 
+            columns = SITE_COLUMNS.get(site, AWS_STATIONS["01"]["columns"])
+            min_cols = max(columns) + 1
+
             parsed_data = []
             for line in lines:
                 if not line.strip():
@@ -80,20 +102,14 @@ async def fetch_aws_data(site: int, dev: int, year: int, month: int, day: int) -
                 # 쉼표로 구분된 CSV 형식 파싱
                 parts = line.strip().split(',')
 
-                if len(parts) < 15:  # 최소 15개 컬럼 필요 (인덱스 14까지)
+                if len(parts) < min_cols:  # 기상대별로 필요한 열까지 있어야 함
                     print(f"[AWS] 컬럼 부족 (got {len(parts)}): {line[:80]}...")
                     continue
 
                 try:
-                    record = {
-                        "Timestamp": parts[0] if len(parts) > 0 else None,
-                        "Temp": float(parts[1]) if len(parts) > 1 and parts[1] else None,
-                        "Humid": float(parts[2]) if len(parts) > 2 and parts[2] else None,
-                        "Radn": float(parts[6]) if len(parts) > 6 and parts[6] else None,
-                        "Wind_degree": float(parts[7]) if len(parts) > 7 and parts[7] else None,
-                        "Wind": float(parts[13]) if len(parts) > 13 and parts[13] else None,
-                        "Rainfall": float(parts[14]) if len(parts) > 14 and parts[14] else None,
-                    }
+                    record = {"Timestamp": parts[0]}
+                    for idx, name in columns.items():
+                        record[name] = _to_float(parts[idx])
                     parsed_data.append(record)
                 except (ValueError, IndexError) as e:
                     print(f"[AWS] 파싱 오류: {line[:50]}... - {str(e)}")
